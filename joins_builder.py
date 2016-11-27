@@ -22,7 +22,7 @@ def test_joins_builder(joins):
                )
     
 
-def test1_with_single_talbes_or_fields(): # OK
+def test1_with_simple_tables_or_fields(): # OK
     """
     it guess'es joining fields from DB model ;)
     table can be either str or DAL table
@@ -279,16 +279,17 @@ if "SMART JOINS BUILDER":  # fold it :)
 
             # make sure values of fields are strings 
             def just_field_name(field):
+                """
+                expects dal.Field or string (or None)
+                """
                 if type(field) is Field:
-                    return field.name
-                elif isinstance(field,  str):
-                    return field
+                    return field.name 
                 else:
-                    raise TypeError("Wrong field type: %s %s " % (field, type(field)))
+                    return field
                
             
-            if nr > 0:           left_field  = just_field_name(left_field)   
-            if nr < len(path)-1: right_field = just_field_name(right_field)
+            left_field  = just_field_name(left_field)   
+            right_field = just_field_name(right_field)
                 
             if isinstance(item, tuple) and len(item)==1: # just in case
                 item = item[0]
@@ -354,8 +355,9 @@ if "SMART JOINS BUILDER":  # fold it :)
             else:
                 current = parse( item ) # current table
                 # print "\n", current, "\n", prev # DBG
+                print "db.%s.on( %s == %s ) )" % ( current.table, db[current.table][current.left_field], db[prev.table][prev.right_field] )
                 joins.append( db[current.table].on( db[current.table][current.left_field] == db[prev.table][prev.right_field] ) )
-            print current
+            # print current
             prev = current
         # dbg.stop_trace()
         return joins
