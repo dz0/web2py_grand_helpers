@@ -1,8 +1,23 @@
 # -*- coding: utf-8 -*-
 
-# I use the default auth DB model, and want to join 4 tables to see user with his/er permissions.
+"""
+Smart joins builder lets you write
+
+    build_joins( ['auth_user', 'auth_membership', 'auth_group', 'auth_permission'] )
+
+instead of
+
+    [
+      db.auth_membership.on( db.auth_membership.user_id == db.auth_user.id ),
+      db.auth_group.on( db.auth_group.id == db.auth_membership.group_id ),
+      db.auth_permission.on( db.auth_permission.group_id == db.auth_group.id ),
+    ]
+"""
+
+# For test cases I use the default auth DB model, and want to join 4 tables.
 # DB model references indicated by arrows:
 # auth_user <- auth_membership -> auth_group <- auth_permission
+
 
 def test_joins_builder(joins):
     data = SQLFORM.grid(db.auth_user.id > 0, fields=(  # can toggle
