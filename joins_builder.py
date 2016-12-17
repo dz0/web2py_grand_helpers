@@ -10,6 +10,8 @@ instead of
       db.auth_group.on( db.auth_group.id == db.auth_membership.group_id ),
       db.auth_permission.on( db.auth_permission.group_id == db.auth_group.id ),
     ]
+    
+ps.: migth be renamed to "build_joins_chain"
 """
 
 # For test cases I use the default auth DB model, and want to join 4 tables.
@@ -88,11 +90,14 @@ def test4__table_and_fields():  # OK
 
 def test5_alias():  # seems OK     # TODO -- better parse alias'es ;)
     
+    # BUG SQLFORM.grid   doesn't give any row if auth_user is aliased
+     
     # http://www.web2py.com/books/default/chapter/29/06/the-database-abstraction-layer#Self-Reference-and-aliases
     
-    # user = db.auth_user.with_alias('user')
-    user = db.auth_user
-    membership = db.auth_membership.with_alias('membership')  # create alias
+     # Aliases -- could be toggled by comments 
+    user = db.auth_user.with_alias('user')
+    # user = db.auth_user
+    membership = db.auth_membership.with_alias('membership')  
     # membership = db.auth_membership
     group = db.auth_group.with_alias('group')
     # group = db.auth_group
@@ -105,15 +110,14 @@ def test5_alias():  # seems OK     # TODO -- better parse alias'es ;)
              )
     headers = {str(field):str(field).replace('.', ".\n") for field in fields}
     
-    data = SQLFORM.grid(user.id > 0, headers=headers, fields=fields,  # can toggle
-    # data = db(True).select( *fields,          # can toggle
+    # data = SQLFORM.grid(user.id > 0, headers=headers, fields=fields,  # can toggle
+    data = db(user.id > 0).select( *fields,          # can toggle
 
             left = build_joins([ 
-                                 user, # aliased_user
-                                 (membership, 'user_id', 'group_id'), # db.auth_membership.with_alias('membership') ,   # ! With Alias
-                                 # membership, # db.auth_membership.with_alias('membership') ,   # ! With Alias
+                                 user, 
+                                 membership, 
                                  group
-                               ])              ###  BUILD JOINS !  ###
+                               ])            
 
         )
     
@@ -460,4 +464,3 @@ if "SMART JOINS BUILDER":  # fold it :)
 
     def  fields(table, field_names):
         return [ str(db[table][fname]) for fname in field_names]
-    
