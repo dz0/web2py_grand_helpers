@@ -18,7 +18,7 @@ instead of
 
 from pprint import pformat
 
-def menu():
+def menu4tests():
     test_functions = [x for x in controller_dir if x.startswith('test') and x!='test_joins_builder']    
     print( controller_dir )
     response.menu = [('TESTS', False, '', 
@@ -27,8 +27,13 @@ def menu():
                             for f in test_functions
                         ]
                     )]
-    # return response.menu
-    
+    return response.menu
+
+controller_dir = dir()
+menu4tests()        
+
+def index():  
+    return dict(menu=MENU(response.menu))
     
 def test_joins_builder(joins):
     fields = ( 
@@ -46,8 +51,7 @@ def test_joins_builder(joins):
 
         )
         
-    menu()
-    
+    menu4tests()
     return dict( 
                 joins = PRE(pformat(joins)),
                 data = data, 
@@ -135,7 +139,7 @@ def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)
 
         )
         
-    menu()
+    menu4tests()
     return dict( 
                 joins = PRE(pformat([user, membership, group])),
                 data = data, 
@@ -483,4 +487,3 @@ if "SMART JOINS BUILDER":  # fold it :)
         return [ str(db[table][fname]) for fname in field_names]
 
 
-controller_dir = dir()
