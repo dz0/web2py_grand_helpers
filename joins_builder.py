@@ -18,7 +18,20 @@ ps.: migth be renamed to "build_joins_chain"
 # DB model references indicated by arrows:
 # auth_user <- auth_membership -> auth_group <- auth_permission
 
+from pprint import pformat
 
+def menu():
+    test_functions = [x for x in controller_dir if x.startswith('test') and x!='test_joins_builder']    
+    print( controller_dir )
+    response.menu = [('TESTS', False, '', 
+                        [  
+                            (f, f==request.function, URL(f) )
+                            for f in test_functions
+                        ]
+                    )]
+    # return response.menu
+    
+    
 def test_joins_builder(joins):
     fields = ( 
                 db.auth_user.id, db.auth_user.first_name, db.auth_user.email, 
@@ -28,15 +41,19 @@ def test_joins_builder(joins):
              )
     headers = {str(field):str(field).replace('.', ".\n") for field in fields}
     
-    data = SQLFORM.grid(db.auth_user.id > 0, headers=headers, fields=fields,  # can toggle
-    # data = db(db.auth_user.id > 0).select( *fields,          # can toggle
+    data = SQLFORM.grid(db.auth_user.id > 0, headers=headers, fields=fields,  # can toggle comment \/
+    # data = db(db.auth_user.id > 0).select( *fields,                         # can toggle comment ^
 
             left = build_joins( joins )              ###  BUILD JOINS !  ###
 
         )
+        
+    menu()
     
-    return dict( data = data, 
-                 sql = XML(db._lastsql[0].replace('LEFT JOIN', '<BR/>LEFT JOIN '))   # shows the joins ;)
+    return dict( 
+                joins = PRE(pformat(joins)),
+                data = data, 
+                sql = XML(db._lastsql[0].replace('LEFT JOIN', '<BR/>LEFT JOIN '))   # shows the joins ;)
                )
     
 
@@ -88,7 +105,7 @@ def test4__table_and_fields():  # OK
         # joins = ['auth_user', (db.auth_membership, 'user_id', None) ] 
     )
 
-def test5_alias():  # seems OK     # TODO -- better parse alias'es ;)
+def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)
     
     # BUG SQLFORM.grid   doesn't give any row if auth_user is aliased
      
@@ -104,8 +121,7 @@ def test5_alias():  # seems OK     # TODO -- better parse alias'es ;)
     
     fields = ( 
                 user.id, user.first_name, user.email, 
-                membership.id, # db.auth_membership.with_alias('membership').id,  # Alias
-                 
+                membership.id, # db.auth_membership.with_alias('membership').id,  
                 group.id, group.role,
              )
     headers = {str(field):str(field).replace('.', ".\n") for field in fields}
@@ -120,9 +136,12 @@ def test5_alias():  # seems OK     # TODO -- better parse alias'es ;)
                                ])            
 
         )
-    
-    return dict( data = data, 
-                 sql = XML(db._lastsql[0].replace('LEFT JOIN', '<BR/>LEFT JOIN '))   # shows the joins ;)
+        
+    menu()
+    return dict( 
+                joins = PRE(pformat([user, membership, group])),
+                data = data, 
+                sql = XML(db._lastsql[0].replace('LEFT JOIN', '<BR/>LEFT JOIN '))   # shows the joins ;)
                ) 
 
 
@@ -464,3 +483,6 @@ if "SMART JOINS BUILDER":  # fold it :)
 
     def  fields(table, field_names):
         return [ str(db[table][fname]) for fname in field_names]
+
+
+controller_dir = dir()
