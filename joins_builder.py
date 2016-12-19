@@ -3,15 +3,13 @@
 
 """
 Smart joins builder lets you write
-    build_joins( ['auth_user', 'auth_membership', 'auth_group', 'auth_permission'] )
+    build_joins_chain( ['auth_user', 'auth_membership', 'auth_group', 'auth_permission'] )
 instead of
     [
       db.auth_membership.on( db.auth_membership.user_id == db.auth_user.id ),
       db.auth_group.on( db.auth_group.id == db.auth_membership.group_id ),
       db.auth_permission.on( db.auth_permission.group_id == db.auth_group.id ),
     ]
-    
-ps.: migth be renamed to "build_joins_chain"
 """
 
 # For test cases I use the default auth DB model, and want to join 4 tables.
@@ -44,7 +42,7 @@ def test_joins_builder(joins):
     data = SQLFORM.grid(db.auth_user.id > 0, headers=headers, fields=fields,  # can toggle comment \/
     # data = db(db.auth_user.id > 0).select( *fields,                         # can toggle comment ^
 
-            left = build_joins( joins )              ###  BUILD JOINS !  ###
+            left = build_joins_chain( joins )              ###  BUILD JOINS !  ###
 
         )
         
@@ -129,7 +127,7 @@ def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)
     # data = SQLFORM.grid(user.id > 0, headers=headers, fields=fields,  # can toggle
     data = db(user.id > 0).select( *fields,          # can toggle
 
-            left = build_joins([ 
+            left = build_joins_chain([ 
                                  user, 
                                  membership, 
                                  group
@@ -282,7 +280,7 @@ if "SMART JOINS BUILDER":  # fold it :)
     # from gluon.packages.dal.pydal._globals import  DEFAULT
     # from gluon.dal import Expression
 
-    def build_joins( path ):
+    def build_joins_chain( path ):
         """
         first item in path is supposed to come from initial query/select
         Path can contain table|field names (see subfunction parse(..))
@@ -292,43 +290,43 @@ if "SMART JOINS BUILDER":  # fold it :)
         
         Examples:
         No fields 
-        >>> ( build_joins( ['auth_user', 'auth_membership', 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', 'auth_membership', 'auth_group']) )
         
-        >>> ( build_joins( [db.auth_user, db.auth_membership, 'auth_group']) )
+        >>> ( build_joins_chain( [db.auth_user, db.auth_membership, 'auth_group']) )
         
-        >>> ( build_joins( [db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]) )
+        >>> ( build_joins_chain( [db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]) )
         
         Many to many with both fields
-        >>> ( build_joins( ['auth_user', ('auth_membership', 'user_id', 'group_id'), 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', ('auth_membership', 'user_id', 'group_id'), 'auth_group']) )
         
-        >>> ( build_joins( ['auth_user', (db.auth_membership, 'user_id', 'group_id'), 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', (db.auth_membership, 'user_id', 'group_id'), 'auth_group']) )
         
         Many to many with one field
-        >>> ( build_joins( ['auth_user', ('auth_membership', None, 'group_id'), 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', ('auth_membership', None, 'group_id'), 'auth_group']) )
         
-        >>> ( build_joins( ['auth_user', (db.auth_membership, 'user_id', None), 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', (db.auth_membership, 'user_id', None), 'auth_group']) )
         
         First with just right field
-        >>> ( build_joins( [ (db.auth_membership, None, 'group_id'), 'auth_group']) )
+        >>> ( build_joins_chain( [ (db.auth_membership, None, 'group_id'), 'auth_group']) )
         
         Last with just left field
-        >>> ( build_joins( ['auth_user', (db.auth_membership, 'user_id', None)]) )
+        >>> ( build_joins_chain( ['auth_user', (db.auth_membership, 'user_id', None)]) )
         
         
         
         ### more experimental 
-        >>> ( build_joins( [db.auth_user, db.auth_membership.user_id ]) )
+        >>> ( build_joins_chain( [db.auth_user, db.auth_membership.user_id ]) )
         
-        >>> ( build_joins( [db.auth_user, db.auth_membership.user_id, db.auth_group ]) )
+        >>> ( build_joins_chain( [db.auth_user, db.auth_membership.user_id, db.auth_group ]) )
         
-        >>> ( build_joins( ['auth_user', db.auth_membership.group_id, 'auth_group']) )
+        >>> ( build_joins_chain( ['auth_user', db.auth_membership.group_id, 'auth_group']) )
 
         #auth_user <- auth_membership -> auth_group <- auth_permission
         
-        >>> ( build_joins( ['auth_user', db.auth_membership.group_id, 'auth_group', db.auth_permission.group_id]) )
+        >>> ( build_joins_chain( ['auth_user', db.auth_membership.group_id, 'auth_group', db.auth_permission.group_id]) )
         
         # Expresion
-        >>> ( build_joins( ['auth_user', db.auth_membership, db.auth_group.on(db.auth_group.id == db.auth_membership.group_id), db.auth_permission.group_id]) )
+        >>> ( build_joins_chain( ['auth_user', db.auth_membership, db.auth_group.on(db.auth_group.id == db.auth_membership.group_id), db.auth_permission.group_id]) )
         
         """
         
