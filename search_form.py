@@ -6,9 +6,9 @@ from gluon.storage import Storage
 TEST SEARCH FILTERS QUERY from FORM
 """
 
-def tester(search, selected_fields):
-    # data = SQLFORM.grid((db.auth_user.id < 5) & search.query, fields=selected_fields  # can toggle
-    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields )          # can toggle
+def tester(search, selected_fields, **kwargs):
+    # data = SQLFORM.grid((db.auth_user.id < 5) & search.query, fields=selected_fields, **kwargs )  # can toggle
+    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )          # can toggle
     menu4tests()
     return dict( data = data, 
                 sql = db._lastsql, 
@@ -21,7 +21,7 @@ def tester(search, selected_fields):
 
 def test_2_same_fields(): # ne OK... nevykdo quer'io
     search = searchQueryfromForm(
-        queryFilter( db.auth_user.first_name, 'equals' ),
+        queryFilter( db.auth_user.first_name, '=' ),
         queryFilter( db.auth_user.first_name, 'contains')
     )
     return tester(  search, 
@@ -53,8 +53,21 @@ def test_custom_field(): # OK
                  ) 
 
 
-def test_aggregate(): #TODO
+def test_id_options_widget(): #TODO
     pass
+
+def test_aggregate(): #TODO
+    import mod_joins_builder
+    search = searchQueryfromForm(
+        queryFilter( Field( "count_user_groups", int), '=', target_expression=db.auth_group.id.count() ),
+        queryFilter( db.auth_user.first_name ),
+        # queryFilter( db.auth_group.role )
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] ,
+                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                    groupby=db.auth_user.first_name 
+                 )     
 
 
 def test_grand_technology_with_good():
@@ -90,7 +103,6 @@ def test_grand_technology_with_good():
     
 def menu4tests():
     test_functions = [x for x in controller_dir if x.startswith('test') and x!='tester' ]    
-    print( controller_dir )
     response.menu = [('TESTS', False, '', 
                         [  
                             (f, f==request.function, URL(f) )
@@ -128,19 +140,19 @@ if "SEARCH FILTERS QUERY from FORM":
     """
 
               
-    def queryFilter(field=None, comparison=None, name_prefix=None,  # for smart way
+    def queryFilter(field=None, comparison=None, name_extension=None,  # for smart way
                     
                     # for customisation
-                    name=None,  #  name of input
+                    name=None,  #  name of input -- to ovveride field name
                     #input=None, #  INPUT(..)  # TODO -- if Field is not enough.. for input..
-                    lambda_query=None, #  lambda, which expexts value from Expr to be given as filtering query
-                    target_expression=None # in case we use field of 'no_table' (this indicates the comparison target)
+                    target_expression=None, # in case we use field of 'no_table' (this indicates the comparison target)
+                    lambda_query=None #  lambda, which expexts value from Expr to be given as filtering query
                     ):
         """
         field --  db.table.field  # input field
         comparison -- action as in grid search fields (str)
-        name_prefix -- based on comparison or table (if same field name in several tables)
-        
+        name_extension -- if we use same field twice or more we need to name them different -- by default based on comparison operation 
+        target_expression -- to what we want to compare our value
         lambda_query -- should be contained in lambda, because   value for comparison  is not known at the  creation time
         """
         
@@ -163,19 +175,19 @@ if "SEARCH FILTERS QUERY from FORM":
                             ('greater than','>'),
                         ]
                     }
-        if name_prefix is None:
-            name_prefix = prefixes.get(comparison, comparison)  
+        if name_extension is None:
+            name_extension = prefixes.get(comparison, comparison)  
         
             
         # name
-        name = name or str(field).replace('.', '__') 
-        if name_prefix:
-            name = name_prefix +'__'+ name 
+        name = name or str(field).replace('.', '__').replace("<no table>", "no_table")
+        if name_extension:
+            name += '__'+name_extension  
              
         search_field = field.clone() # APPLY new name for search fields , but leave original field untouched             
         search_field.name = name
-        search_field.label += " (%s)"%name_prefix  # DBG
-        #search_field.comment = name_prefix
+        search_field.label += " (%s)"%name_extension  # DBG
+        #search_field.comment = name_extension
 
 
         from gluon.validators import Validator 
@@ -202,7 +214,7 @@ if "SEARCH FILTERS QUERY from FORM":
 
             # taken from pydal/helpers/methods.py  def smart_query
      
-            if op == '=': new_query = expr==value; 
+            if op in ['=', '==']: new_query = expr==value; 
             elif op == '<': new_query = expr<value
             elif op == '>': new_query = expr>value
             elif op == '<=': new_query = expr<=value
@@ -216,12 +228,12 @@ if "SEARCH FILTERS QUERY from FORM":
                 elif op == 'like': new_query = expr.ilike(value)
                 elif op == 'startswith': new_query = expr.startswith(value)
                 elif op == 'endswith': new_query = expr.endswith(value)
-                else: raise RuntimeError("Invalid operation")
+                else: raise RuntimeError("Invalid operation: %s %s %s" %(expr, op, repr(value)) )
             elif expr._db._adapter.dbengine=='google:datastore' and \
                  expr.type in ('list:integer', 'list:string', 'list:reference'):
                 if op == 'contains': new_query = expr.contains(value)
-                else: raise RuntimeError("Invalid operation")
-            else: raise RuntimeError("Invalid operation")
+                else: raise RuntimeError("Invalid operation: %s %s %s" %(expr, op, repr(value)) )
+            else: raise RuntimeError("Invalid operation: %s %s %s" %(expr, op, repr(value)) )
             
             return new_query
         
@@ -244,7 +256,7 @@ if "SEARCH FILTERS QUERY from FORM":
         ):
         # FORM
         fields = []
-        formname = ""
+        formname = "Search_form_"
         for filter in filters:
             if filter.field:
                 # filter.field.writable = True
@@ -258,37 +270,27 @@ if "SEARCH FILTERS QUERY from FORM":
         form = SQLFORM.factory(
             *fields, 
             keepvalues=True,
-            # table_name = formname,
+            table_name = "Search_form_",
             formname = formname
         )
         
         form.process(keepvalues=True)
-        #DBG
-        # db.technology.sku.name = "bla_bla"
-        # form = SQLFORM.factory( db.technology.sku, db.technology.type  )
+
 
             
-        # QUERY    
+        # BUILD QUERY    
 
-        # if type(filters[0].target_expression) is Field:
-            # first_table = filters[0].target_expression._tablename  # TODO be carefull if Expression is not directly Field
-        # else:
-            # raise TypeError("Not implemented if expression is more robust: %s" % filters[0].target_expression )
-        
-        # first_query = db[first_table]._id > 0  # dummy query in case no filter is selected -- could be 1==1
-        first_query = True  # dummy query in case no filter is selected # https://groups.google.com/forum/#!topic/web2py/x0xydHDjprw
-        
-        queries = [first_query]
+        queries = []
         for filter in filters:
-            vars = request.vars # form.vars?
-            if filter.name in vars and vars[filter.name]:
-                queries.append( filter.lambda_query( vars[filter.name] ) )
+            filter_value =  request.vars.get( filter.field.name, None )
+            if filter_value:
+                queries.append( filter.lambda_query( filter_value ) )
             
-        
-        query = reduce(lambda a, b: (a & b), queries)  
-        # query = reduce(lambda a, b: (a & b), queries)   if queries else None
-        # query = reduce(lambda a, b: (a & b), queries)   if queries else 1>0  # just True if no other stuff 
-        
+        if queries:
+            query = reduce(lambda a, b: (a & b), queries) 
+        else:
+            query = True # dummy query, which doesn't break anything  # would show "AND 1" in SQL 
+        # print ("DBG queries as_dict:",  [q.as_dict() for q in queries[1:]])
         return Storage( form=form, query=query )
 
 

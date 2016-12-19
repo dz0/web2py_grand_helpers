@@ -20,7 +20,6 @@ from pprint import pformat
 
 def menu4tests():
     test_functions = [x for x in controller_dir if x.startswith('test') and x!='test_joins_builder']    
-    print( controller_dir )
     response.menu = [('TESTS', False, '', 
                         [  
                             (f, f==request.function, URL(f) )
