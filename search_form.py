@@ -8,7 +8,12 @@ TEST SEARCH FILTERS QUERY from FORM
 
 def tester(search, selected_fields, **kwargs):
     # data = SQLFORM.grid((db.auth_user.id < 5) & search.query, fields=selected_fields, **kwargs )  # can toggle
-    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )          # can toggle
+    if search.having: 
+        kwargs['having'] = search.having  # for aggregates
+        
+    # sql = db((db.auth_user.id < 5) & search.query)._select( *selected_fields, **kwargs )    
+    # print( "DBG SQL: ", sql )
+    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )    
     menu4tests()
     return dict( data = data, 
                 sql = db._lastsql, 
@@ -19,7 +24,7 @@ def tester(search, selected_fields, **kwargs):
                 )
     
 
-def test_2_same_fields(): # ne OK... nevykdo quer'io
+def test_2_same_fields(): # OK
     search = searchQueryfromForm(
         queryFilter( db.auth_user.first_name, '=' ),
         queryFilter( db.auth_user.first_name, 'contains')
@@ -29,7 +34,7 @@ def test_2_same_fields(): # ne OK... nevykdo quer'io
                  ) 
 
 
-def test_expr(): # ne OK...
+def test_expr_combination_of_fields(): # OK...
     search = searchQueryfromForm(
         # queryFilter( db.auth_user.first_name, 'contains' ),
         queryFilter( Field( "first_name_with_email"),  target_expression=db.auth_user.first_name + db.auth_user.email ),
@@ -41,32 +46,54 @@ def test_expr(): # ne OK...
                  ) 
     
     
-def test_custom_field(): # OK
+def test_expr_simple_field(): # OK
     search = searchQueryfromForm(
         # queryFilter( db.auth_user.first_name, 'contains' ),
         queryFilter( Field( "first_name__custom"),  target_expression=db.auth_user.first_name  ),
         queryFilter( Field( "first_name__custom2"), '<',  target_expression=db.auth_user.first_name  ),
-        queryFilter( db.auth_user.email ),
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
                  ) 
 
-
-def test_id_options_widget(): #TODO
-    pass
-
-def test_aggregate(): #TODO
-    import mod_joins_builder
+def test_reference_by_anonymous_field(): # OK
+    
     search = searchQueryfromForm(
-        queryFilter( Field( "count_user_groups", int), '=', target_expression=db.auth_group.id.count() ),
+        # queryFilter( db.auth_membership.user_id ), -- would require left join...
+        queryFilter( Field('user', 'integer', 
+                     requires=IS_IN_DB(db, 'auth_user.id',  db.auth_user._format)), 
+                     target_expression = db.auth_user.id
+                    ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name] ,
+                 )     
+
+
+def test_reference_field_widget(): # OK
+    from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
+    
+    search = searchQueryfromForm(
+        queryFilter( db.auth_membership.user_id ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
+                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                 )     
+
+
+def test_aggregate(): # OK;   TODO: automatically detect if target_expression_is_aggregate
+    from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
+    
+    search = searchQueryfromForm(
+        queryFilter( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_expression_is_aggregate=True ),
         queryFilter( db.auth_user.first_name ),
         # queryFilter( db.auth_group.role )
     )
     return tester(  search, 
-                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] ,
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.id.count() ] ,
                     left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
-                    groupby=db.auth_user.first_name 
+                    groupby=db.auth_user.first_name , 
                  )     
 
 
@@ -147,6 +174,7 @@ if "SEARCH FILTERS QUERY from FORM":
                     #input=None, #  INPUT(..)  # TODO -- if Field is not enough.. for input..
                     target_expression=None, # in case we use field of 'no_table' (this indicates the comparison target)
                     lambda_query=None #  lambda, which expexts value from Expr to be given as filtering query
+                    , target_expression_is_aggregate=False
                     ):
         """
         field --  db.table.field  # input field
@@ -246,7 +274,8 @@ if "SEARCH FILTERS QUERY from FORM":
                         # name=name,   # is in field -- so maybe not needed
                         lambda_query=lambda_query,
                         # comparison=comparison,               # is in lambda_query'je, so maybe not needed
-                        # target_expression=target_expression  # is in lambda_query'je, so maybe not needed
+                        target_expression=target_expression  # is in lambda_query'je, so maybe not needed
+                        ,target_expression_is_aggregate = target_expression_is_aggregate
                       )
         
         
@@ -281,16 +310,29 @@ if "SEARCH FILTERS QUERY from FORM":
         # BUILD QUERY    
 
         queries = []
+        queries_4aggregates = []
         for filter in filters:
             filter_value =  request.vars.get( filter.field.name, None )
             if filter_value:
-                queries.append( filter.lambda_query( filter_value ) )
+                q = filter.lambda_query( filter_value ) # produce query
+                # if filter.target_expression.op == db._adapter.AGGREGATE:
+                if filter.target_expression_is_aggregate:
+                    queries_4aggregates.append(  q ) 
+                else:
+                    queries.append( q )
             
+        # print('DBG queries_4aggregates:', queries_4aggregates)
         if queries:
             query = reduce(lambda a, b: (a & b), queries) 
         else:
             query = True # dummy query, which doesn't break anything  # would show "AND 1" in SQL 
-        # print ("DBG queries as_dict:",  [q.as_dict() for q in queries[1:]])
-        return Storage( form=form, query=query )
+
+        if queries_4aggregates:
+            having = reduce(lambda a, b: (a & b), queries_4aggregates)
+        else:
+            having = None
+        
+        
+        return Storage( form=form, query=query, having=having )
 
 
