@@ -186,7 +186,7 @@ def SearchForm(
             
             db = current.db # defined in models
             if filter.target_expression.op == db._adapter.AGGREGATE:
-            # if filter.target_is_aggregate:
+            # if filter.target_is_aggregate:  # with this works OK
                 # print("DBG db.adapter", dir(db._adapter))
                 queries_4aggregates.append(  q ) 
             else:
