@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from joins_builder import build_joins_chain
+# from joins_builder import build_joins_chain
+from plugin_joins_builder.joins_builder import build_joins_chain
+# from applications.app.modules.plugin_joins_builder.joins_builder import build_joins_chain
 
 """
 for TEST purposes 
@@ -23,7 +25,7 @@ instead of
 from pprint import pformat
 
 
-def test_joins_builder(joins):
+def tester(joins):
     fields = ( 
                 db.auth_user.id, db.auth_user.first_name, db.auth_user.email, 
                 db.auth_membership.id,
@@ -52,13 +54,13 @@ def test1_with_simple_tables_or_fields(): # OK
     it guess'es joining fields from DB model ;)
     table can be either str or DAL table
     """
-    return test_joins_builder( 
+    return tester( 
         joins =  ['auth_user', db.auth_membership, 'auth_group', db.auth_permission.group_id]  
     )
 
 
 def test2_with_mixed_indication_and_expr(): # test with usual expression -- OK
-    return test_joins_builder( 
+    return tester( 
         joins =  [  'auth_user',                # table name as str
                     db.auth_membership,         # table as DAL
                     db.auth_group.on( db.auth_group.id == db.auth_membership.group_id),  # standart expr
@@ -72,7 +74,7 @@ def test3_with_indication_of_fields():  # OK
     if you want to be sure the right fields are used, 
     you can indicate them in tuples 
     """
-    return test_joins_builder( 
+    return tester( 
         joins = [ (None,  db.auth_user.id),             # could be just:   db.auth_user.id
                   (db.auth_membership.user_id, db.auth_membership.group_id),  
                   (db.auth_group.id, db.auth_group.id), 
@@ -86,7 +88,7 @@ def test4__table_and_fields():  # OK
     """
     you can also tell: table[name], field to previous, field to next 
     """
-    return test_joins_builder( 
+    return tester( 
         joins = [ (db.auth_user, None, 'id'), 
                   (db.auth_membership, 'user_id', 'group_id'),
                   (db.auth_group, 'id', 'id'), 
@@ -144,13 +146,15 @@ def populate_fake_auth():
 
 controller_dir = dir()
 def menu4tests():
-    test_functions = [x for x in controller_dir if x.startswith('test') and x!='test_joins_builder']    
+    test_functions = [x for x in controller_dir if x.startswith('test') and x!='tester']    
     response.menu = [('TESTS', False, '', 
                         [  
                             (f, f==request.function, URL(f) )
                             for f in test_functions
                         ]
-                    )]
+                     ),
+                     ('populate auth tables', False, URL('populate_fake_auth') ,
+                    ]
     return response.menu
 
 

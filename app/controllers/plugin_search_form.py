@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from search_form import queryFilter, SearchForm
+from plugin_search_form.search_form import queryFilter, SearchForm
 
-from joins_builder import build_joins_chain  # uses another grand plugin
+from plugin_joins_builder.joins_builder import build_joins_chain  # uses another grand plugin
 
 """
 TEST SEARCH FILTERS QUERY from FORM

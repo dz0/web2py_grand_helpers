@@ -4,11 +4,11 @@ joins_builder
 -------------
 
 Smart joins builder lets you write
-```python
+```py
 build_joins_chain( 'auth_user', 'auth_membership', 'auth_group', 'auth_permission' )
 ```
 instead of
-```python
+```py
 [
   db.auth_membership.on( db.auth_membership.user_id == db.auth_user.id ),
   db.auth_group.on( db.auth_group.id == db.auth_membership.group_id ),
@@ -16,7 +16,7 @@ instead of
 ]
 ```
 
-for more examples see  ```controllers/plugins_joins_builder.py```
+for more examples see  ```controllers/plugin_joins_builder.py```
 
 search_form
 -----------
@@ -31,7 +31,7 @@ Search form  has extra layer when defining  Fields -- it defines:
 - some optional params.. 
 
 Example:
-```python
+```py
 search = SearchForm(
     queryFilter( db.auth_user.first_name),
     queryFilter( db.auth_user.last_name),
@@ -40,5 +40,5 @@ search = SearchForm(
 
 data = db((db.auth_user.id > 0) & search.query).select( db.auth_user.ALL )  
 ```
-for more examples see  ```controllers/plugins_search_form.py```
+for more examples see  ```controllers/plugin_search_form.py```
  
