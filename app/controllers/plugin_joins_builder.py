@@ -9,7 +9,7 @@ for TEST purposes
 
 """
 Smart joins builder lets you write
-    build_joins_chain( ['auth_user', 'auth_membership', 'auth_group', 'auth_permission'] )
+    build_joins_chain( 'auth_user', 'auth_membership', 'auth_group', 'auth_permission' )
 instead of
     [
       db.auth_membership.on( db.auth_membership.user_id == db.auth_user.id ),
@@ -80,7 +80,6 @@ def test3_with_indication_of_fields():  # OK
                   (db.auth_group.id, db.auth_group.id), 
                   (db.auth_permission.group_id, None)    # could be just:   db.auth_permission.group_id
                 ] 
-        # joins = ['auth_user', (db.auth_membership, 'user_id', None) ] 
     )
 
 
@@ -94,7 +93,6 @@ def test4__table_and_fields():  # OK
                   (db.auth_group, 'id', 'id'), 
                   (db.auth_permission, 'group_id', None)
                 ] 
-        # joins = ['auth_user', (db.auth_membership, 'user_id', None) ] 
     )
 
 def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)

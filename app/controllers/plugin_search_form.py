@@ -17,7 +17,7 @@ def tester(search, selected_fields, **kwargs):
     data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )    
     menu4tests()
     return dict( data = data, 
-                sql = db._lastsql, 
+                sql = XML(str(db._lastsql[0]).replace('HAVING', "<br>HAVING").replace('WHERE', "<br>WHERE").replace('AND', "<br>AND").replace('LEFT JOIN', '<BR/>LEFT JOIN ')), 
                 search_form=search.form,  
                 # extra=response.tool, 
                 # query=search.query.as_dict(flat=True)   
@@ -52,7 +52,7 @@ def test3_fields_from_different_tables(): # OK
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
-                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                    left = build_joins_chain( db.auth_user, db.auth_membership, db.auth_group ),
                  )     
 
     
@@ -92,7 +92,7 @@ def test6_reference_field_widget(): # OK
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
-                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                    left = build_joins_chain( db.auth_user, db.auth_membership, db.auth_group ),
                  )     
 
 def test7_reference_by_anonymous_field(): # OK
@@ -117,7 +117,7 @@ def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.id.count() ] ,
-                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                    left = build_joins_chain( db.auth_user, db.auth_membership, db.auth_group ),
                     groupby=db.auth_user.first_name , 
                  )     
 
