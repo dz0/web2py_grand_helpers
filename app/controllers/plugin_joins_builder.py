@@ -153,7 +153,7 @@ def menu4tests():
                             for f in test_functions
                         ]
                      ),
-                     ('populate auth tables', False, URL('populate_fake_auth') ,
+                     ('populate auth tables', False, URL('populate_fake_auth') ),
                     ]
     return response.menu
 
