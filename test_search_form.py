@@ -1,71 +1,174 @@
-# iskvietimas:
-# python web2py.py -S grids/test_search_form/index -M 
+# -*- coding: utf-8 -*-
+from gluon.storage import Storage
+from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
+from mod_search_form import queryFilter, searchQueryfromForm
 
+"""
+TEST SEARCH FILTERS QUERY from FORM
+"""
 
-def index():
+def tester(search, selected_fields, **kwargs):
+    # data = SQLFORM.grid((db.auth_user.id < 5) & search.query, fields=selected_fields, **kwargs )  # can toggle
+    if search.having: 
+        kwargs['having'] = search.having  # for aggregates
         
+    # sql = db((db.auth_user.id < 5) & search.query)._select( *selected_fields, **kwargs )    
+    # print( "DBG SQL: ", sql )
+    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )    
+    menu4tests()
+    return dict( data = data, 
+                sql = db._lastsql, 
+                search_form=search.form,  
+                # extra=response.tool, 
+                # query=search.query.as_dict(flat=True)   
+                query=XML(str(search.query).replace('AND', "<br>AND"))
+                )
     
-    # In [44]: f1 = SQLFORM.factory( db.auth_user.email, db.auth_user.last_name )
+def test1_simple_fields(): # OK
+    search = searchQueryfromForm(
+        queryFilter( db.auth_user.first_name),
+        queryFilter( db.auth_user.email )
+    )
+    return tester(  search, 
+                    selected_fields=[db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
 
-    # In [45]: f2 = SQLFORM.factory( db.auth_user.email )
-
-    # In [46]: f3 = SQLFORM.factory( db.auth_user.email, db.auth_user.email )
-
-    # In [47]: print str(f1).replace('<input', "\n<INPUT")
-    # In [48]: print str(f2).replace('<input', "\n<INPUT")
-    # In [49]: print str(f3).replace('<input', "\n<INPUT")
-
-
-    _from = db.auth_user.email.clone()        
-    # Out[53]: <pydal.objects.Field at 0x7f18931581d0>
-    # In [54]: str(_from)
-    # Out[54]: 'auth_user.email'
-
-    _from.name = "from"
-
-    # In [56]: str(_from)
-    # Out[56]: 'auth_user.from'
+def test2_same_fields_twice(): # OK
+    search = searchQueryfromForm(
+        queryFilter( db.auth_user.first_name, '=' ),
+        queryFilter( db.auth_user.first_name, 'contains')
+    )
+    return tester(  search, 
+                    selected_fields=[db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
 
 
-    _to = db.auth_user.email.clone()     
+def test3_fields_from_different_tables(): # OK
+    
+    search = searchQueryfromForm(
+        queryFilter( db.auth_user.first_name ),
+        queryFilter( db.auth_user.email ),
+        queryFilter( db.auth_group.role ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
+                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                 )     
 
-    _to.name = "to"
+    
+    
+def test4_expr_custom_fields(): # OK
+    search = searchQueryfromForm(
+        # queryFilter( db.auth_user.first_name, 'contains' ),
+        queryFilter( Field( "first_name__custom"),  target_expression=db.auth_user.first_name  ),
+        queryFilter( Field( "first_name__custom2"), '<',  target_expression=db.auth_user.first_name  ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
 
-    f4 = SQLFORM.factory( _from, _to )
-
-    # In [60]: print str(f4).replace('<input', "\n<INPUT")
-    # <form action="#" class="form-horizontal" enctype="multipart/form-data" method="post"><div class="form-group" id="no_table_from__row"><label class="control-label col-sm-3" for="no_table_from" id="no_table_from__label">E-mail</label><div class="col-sm-9">
-    # <INPUT class="form-control string" id="no_table_from" name="from" type="text" value="" /><span class="help-block"></span></div></div><div class="form-group" id="no_table_to__row"><label class="control-label col-sm-3" for="no_table_to" id="no_table_to__label">E-mail</label><div class="col-sm-9">
-    # <INPUT class="form-control string" id="no_table_to" name="to" type="text" value="" /><span class="help-block"></span></div></div><div class="form-group" id="submit_record__row"><div class="col-sm-9 col-sm-offset-3">
-    # <INPUT class="btn btn-primary" type="submit" value="Submit" /></div></div></form>
-
-    return dict( form=f4, html=str(f4).replace('<input', "\n<INPUT") ) 
-
-"""
-Hi,
-
-I want to construct search forms, and sometimes I need to have several same fields in them..
-
-
-For simplified example, let's say, I need 2 email fields:
- - to search messages by "from"
- - to search messages by "to"
-
-SQLFORM.factory( db.auth_user.email, db.auth_user.email )
-
-but it gives me just one field without any warning. Which would be ok in most cases.
-But I need 2 fields :)
-
-I mangled a bit with "clone", but didn't succed:
-
-        from = db.auth_user.email.clone()        
-        from.name = "from"
-
-        to = db.auth_user.email.clone()     
-        to.name = "to"
+def test5_expr_combination_of_fields(): # OK...
+    # from pydal.objects import Expression
+    search = searchQueryfromForm(
+        # queryFilter( db.auth_user.first_name, 'contains' ),
+        queryFilter( Field( "first_name_with_email"),  target_expression=db.auth_user.first_name + db.auth_user.email ),  #  can cause problems if Null 
+        # queryFilter( Field( "first_name_with_email"),  
+                    # target_expression=Expression(db, db._adapter.CONCAT, db.auth_user.first_name, db.auth_user.email) 
+                    # ),
+        queryFilter( db.auth_user.email ),
+    )
+    
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
 
 
-f4 = SQLFORM.factory( _from, _to )
-print str(f4).replace('<input', "\n<INPUT")
 
-"""
+
+def test6_reference_field_widget(): # OK
+    
+    search = searchQueryfromForm(
+        queryFilter( db.auth_membership.user_id ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
+                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                 )     
+
+def test7_reference_by_anonymous_field(): # OK
+    
+    search = searchQueryfromForm(
+        # queryFilter( db.auth_membership.user_id ), -- would require left join...
+        queryFilter( Field('user', 'integer', 
+                     requires=IS_IN_DB(db, 'auth_user.id',  db.auth_user._format)), 
+                     target_expression = db.auth_user.id
+                    ),
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name] ,
+                 )     
+
+def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
+    
+    search = searchQueryfromForm(
+        queryFilter( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_is_aggregate=True ),
+        queryFilter( db.auth_user.first_name ),
+        # queryFilter( db.auth_group.role )
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.id.count() ] ,
+                    left = build_joins_chain([ db.auth_user, db.auth_membership, db.auth_group ]),
+                    groupby=db.auth_user.first_name , 
+                 )     
+
+
+def testgrand_technology_with_good():
+    # db.technology.sku.name = "bla.bla"  # IGNORUOJA laukus, su tašku pavadinime
+
+    search = searchQueryfromForm(
+        queryFilter( db.technology.active ),
+        queryFilter( db.technology.sku, '==' ),
+        queryFilter( db.technology.title, 'contains' ),
+        queryFilter( db.technology.type ),
+        queryFilter( db.technology.good_id ),
+    )
+    
+    menu4tests()
+    return dict(  
+         searchform = search.form, 
+         data_grid = ( SQLFORM.grid(search.query, 
+                        fields=[db.technology.sku, db.good.title,
+                        # tarp kitko:
+                        # db.technology.good_id,  ERROR
+                        #   /sqlhtml.py", line 2689, in grid
+                        #    nvalue = field.represent(value, row)
+                        # TypeError: <lambda>() takes exactly 1 argument (2 given)
+                        ], 
+                        left=[ db.good.on(db.technology.good_id==db.good.id)], 
+                        user_signature=False) 
+                        if search.query else None),
+         data_rows = db(search.query).select() if search.query else None,
+         extra=response.toolbar(), 
+         query=XML(str(search.query).replace('AND', "<br>AND"))
+    ) 
+    
+    
+def menu4tests():
+    test_functions = [x for x in controller_dir if x.startswith('test') and x!='tester' ]    
+    response.menu = [('TESTS', False, '', 
+                        [  
+                            (f, f==request.function, URL(f) )
+                            for f in test_functions
+                        ]
+                    )]
+    return response.menu
+    
+controller_dir = dir()
+# menu4tests()        
+
+def index():  
+    menu4tests()
+    return dict(menu=MENU(response.menu))
+    
+
+
