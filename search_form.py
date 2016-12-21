@@ -82,11 +82,11 @@ def test_reference_field_widget(): # OK
                  )     
 
 
-def test_aggregate(): # OK;   TODO: automatically detect if target_expression_is_aggregate
+def test_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
     from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
     
     search = searchQueryfromForm(
-        queryFilter( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_expression_is_aggregate=True ),
+        queryFilter( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_is_aggregate=True ),
         queryFilter( db.auth_user.first_name ),
         # queryFilter( db.auth_group.role )
     )
@@ -165,7 +165,28 @@ if "SEARCH FILTERS QUERY from FORM":
         'reference': ['=', '!='],
         'boolean': ['=', '!=']}
     """
-
+    def get_fields_from_format(format_txt):  # TODO
+        """
+        >>> get_format_fields( '%(first_name)s %(last_name)s' )
+        ['first_name',  'last_name']
+        """
+        import re
+        regex = r"\%\((.+?)\)s"
+        results = re.findall(regex, format_txt)
+        return results
+        
+        
+    
+    def grand_translation_val():  # TODO
+        measurement_title_field = db.translation_field.with_alias('measurement_title').value.coalesce(
+            db.measurement.title )
+                    
+        db.translation_field.with_alias('measurement_title').on(
+                        (db.translation_field.with_alias('measurement_title').tablename == 'measurement') &
+                        (db.translation_field.with_alias('measurement_title').fieldname == 'title') &
+                        (db.translation_field.with_alias('measurement_title').rid == db.measurement.id) &
+                        (db.translation_field.with_alias('measurement_title').language_id == auth.user.language_id)
+                    )        
               
     def queryFilter(field=None, comparison=None, name_extension=None,  # for smart way
                     
@@ -173,15 +194,15 @@ if "SEARCH FILTERS QUERY from FORM":
                     name=None,  #  name of input -- to ovveride field name
                     #input=None, #  INPUT(..)  # TODO -- if Field is not enough.. for input..
                     target_expression=None, # in case we use field of 'no_table' (this indicates the comparison target)
-                    lambda_query=None #  lambda, which expexts value from Expr to be given as filtering query
-                    , target_expression_is_aggregate=False
+                    query_function=None #  lambda, which expexts value from Expr to be given as filtering query
+                    , target_is_aggregate=False
                     ):
         """
         field --  db.table.field  # input field
         comparison -- action as in grid search fields (str)
         name_extension -- if we use same field twice or more we need to name them different -- by default based on comparison operation 
         target_expression -- to what we want to compare our value
-        lambda_query -- should be contained in lambda, because   value for comparison  is not known at the  creation time
+        query_function -- should be contained in lambda, because   value for comparison  is not known at the  creation time
         """
         
         # comparison
@@ -265,17 +286,17 @@ if "SEARCH FILTERS QUERY from FORM":
             
             return new_query
         
-        if not lambda_query:
-            # def lambda_query( value ): return query4filter(field, comparison, value)
-            lambda_query = lambda value: query4filter(target_expression, comparison, value)
+        if not query_function:
+            # def query_function( value ): return query4filter(field, comparison, value)
+            query_function = lambda value: query4filter(target_expression, comparison, value)
         
         return Storage(
                         field=search_field, 
                         # name=name,   # is in field -- so maybe not needed
-                        lambda_query=lambda_query,
-                        # comparison=comparison,               # is in lambda_query'je, so maybe not needed
-                        target_expression=target_expression  # is in lambda_query'je, so maybe not needed
-                        ,target_expression_is_aggregate = target_expression_is_aggregate
+                        query_function=query_function,
+                        # comparison=comparison,               # is in query_function'je, so maybe not needed
+                        target_expression=target_expression  # is in query_function'je, so maybe not needed
+                        ,target_is_aggregate = target_is_aggregate
                       )
         
         
@@ -314,9 +335,11 @@ if "SEARCH FILTERS QUERY from FORM":
         for filter in filters:
             filter_value =  request.vars.get( filter.field.name, None )
             if filter_value:
-                q = filter.lambda_query( filter_value ) # produce query
+                q = filter.query_function( filter_value ) # produce query
+                
                 # if filter.target_expression.op == db._adapter.AGGREGATE:
-                if filter.target_expression_is_aggregate:
+                if filter.target_is_aggregate:
+                    # print("DBG db.adapter", dir(db._adapter))
                     queries_4aggregates.append(  q ) 
                 else:
                     queries.append( q )
