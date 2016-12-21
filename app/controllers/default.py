@@ -8,7 +8,7 @@ def index():
     return dict(
                 menu = MENU( [
                   ('plugin_joins_builder', False, URL(c='plugin_joins_builder', f='index')),
-                  ('plugin_joins_builder', False, URL(c='plugin_search_form', f='index')),
+                  ('plugin_search_form', False, URL(c='plugin_search_form', f='index')),
                 ] )
             )
 
