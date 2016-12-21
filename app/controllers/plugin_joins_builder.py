@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
-from mod_search_form import queryFilter, searchQueryfromForm
+from joins_builder import build_joins_chain
 
+"""
+for TEST purposes 
+"""
 
 """
 Smart joins builder lets you write
@@ -33,7 +35,7 @@ def test_joins_builder(joins):
     data = SQLFORM.grid(db.auth_user.id > 0, headers=headers, fields=fields,  # can toggle comment \/
     # data = db(db.auth_user.id > 0).select( *fields,                         # can toggle comment ^
 
-            left = build_joins_chain( joins )              ###  BUILD JOINS !  ###
+            left = build_joins_chain( *joins )              ###  BUILD JOINS !  ###
 
         )
         
@@ -117,12 +119,7 @@ def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)
     # data = SQLFORM.grid(user.id > 0, headers=headers, fields=fields,  # can toggle
     data = db(user.id > 0).select( *fields,          # can toggle
 
-            left = build_joins_chain([ 
-                                 user, 
-                                 membership, 
-                                 group
-                               ])            
-
+            left = build_joins_chain( user, membership, group ) 
         )
         
     menu4tests()

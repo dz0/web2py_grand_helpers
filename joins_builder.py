@@ -1,3 +1,1 @@
-see:
-    mod_joins_builder.py 
-    test_joins_builder.py
+moved to plugin_joins_builder 

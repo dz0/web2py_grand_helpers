@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from gluon.storage import Storage
-from mod_joins_builder import build_joins_chain, set_db;  set_db(db)
-from mod_search_form import queryFilter, searchQueryfromForm
+from search_form import queryFilter, SearchForm
+
+from joins_builder import build_joins_chain  # uses another grand plugin
 
 """
 TEST SEARCH FILTERS QUERY from FORM
@@ -25,7 +25,7 @@ def tester(search, selected_fields, **kwargs):
                 )
     
 def test1_simple_fields(): # OK
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( db.auth_user.first_name),
         queryFilter( db.auth_user.email )
     )
@@ -34,7 +34,7 @@ def test1_simple_fields(): # OK
                  ) 
 
 def test2_same_fields_twice(): # OK
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( db.auth_user.first_name, '=' ),
         queryFilter( db.auth_user.first_name, 'contains')
     )
@@ -45,7 +45,7 @@ def test2_same_fields_twice(): # OK
 
 def test3_fields_from_different_tables(): # OK
     
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( db.auth_user.first_name ),
         queryFilter( db.auth_user.email ),
         queryFilter( db.auth_group.role ),
@@ -58,7 +58,7 @@ def test3_fields_from_different_tables(): # OK
     
     
 def test4_expr_custom_fields(): # OK
-    search = searchQueryfromForm(
+    search = SearchForm(
         # queryFilter( db.auth_user.first_name, 'contains' ),
         queryFilter( Field( "first_name__custom"),  target_expression=db.auth_user.first_name  ),
         queryFilter( Field( "first_name__custom2"), '<',  target_expression=db.auth_user.first_name  ),
@@ -69,7 +69,7 @@ def test4_expr_custom_fields(): # OK
 
 def test5_expr_combination_of_fields(): # OK...
     # from pydal.objects import Expression
-    search = searchQueryfromForm(
+    search = SearchForm(
         # queryFilter( db.auth_user.first_name, 'contains' ),
         queryFilter( Field( "first_name_with_email"),  target_expression=db.auth_user.first_name + db.auth_user.email ),  #  can cause problems if Null 
         # queryFilter( Field( "first_name_with_email"),  
@@ -87,7 +87,7 @@ def test5_expr_combination_of_fields(): # OK...
 
 def test6_reference_field_widget(): # OK
     
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( db.auth_membership.user_id ),
     )
     return tester(  search, 
@@ -97,7 +97,7 @@ def test6_reference_field_widget(): # OK
 
 def test7_reference_by_anonymous_field(): # OK
     
-    search = searchQueryfromForm(
+    search = SearchForm(
         # queryFilter( db.auth_membership.user_id ), -- would require left join...
         queryFilter( Field('user', 'integer', 
                      requires=IS_IN_DB(db, 'auth_user.id',  db.auth_user._format)), 
@@ -110,7 +110,7 @@ def test7_reference_by_anonymous_field(): # OK
 
 def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
     
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_is_aggregate=True ),
         queryFilter( db.auth_user.first_name ),
         # queryFilter( db.auth_group.role )
@@ -125,7 +125,7 @@ def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
 def testgrand_technology_with_good():
     # db.technology.sku.name = "bla.bla"  # IGNORUOJA laukus, su tašku pavadinime
 
-    search = searchQueryfromForm(
+    search = SearchForm(
         queryFilter( db.technology.active ),
         queryFilter( db.technology.sku, '==' ),
         queryFilter( db.technology.title, 'contains' ),

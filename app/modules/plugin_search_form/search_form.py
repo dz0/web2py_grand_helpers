@@ -2,6 +2,18 @@ from gluon.storage import Storage
 from gluon import current
 from gluon.sqlhtml import SQLFORM
 
+"""
+helps buid SEARCH FORM  so, that 
+entered values are used to construct search_query
+
+inspiration came from grid search (which itself is not well suitable for end users)..
+
+Search form  has extra layer when defining  Fields -- it defines:
+- comparison operator
+- Expression -- that is compared to entered value
+- some optional params.. 
+
+"""
 
 ########################################
 #    SEARCH FILTERS QUERY from FORM    #
@@ -135,7 +147,7 @@ def queryFilter(field=None, comparison=None, name_extension=None,  # for smart w
                   )
     
     
-def searchQueryfromForm(
+def SearchForm(
         *filters
         # *components, **attributes
     ):

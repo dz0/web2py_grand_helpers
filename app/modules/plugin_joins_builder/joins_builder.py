@@ -11,12 +11,12 @@ instead of
     ]
 """
 
-from gluon import current
+from gluon import current as gluon_current
 
-db = None  # let's hope, that db won't change for the app...
-def set_db(given_db=current.db):
-    global db
-    db = given_db
+# db = None  # let's hope, that db won't change for the app...
+# def set_db(given_db=current.db):
+    # global db
+    # db = given_db
 
 
 # from __future__ import print_function  # needed in my env for  web2py shell    
@@ -29,6 +29,7 @@ from gluon.storage import Storage
 from pydal.objects import Field, Expression, Table
 
 def find_references_and_fkeys( table ):
+    db = gluon_current.db
     """
     returns set/dict of referenced tables (associated with grouped foreign keys)
     
@@ -44,7 +45,7 @@ def find_references_and_fkeys( table ):
             result[ referenced_table ].append( field.name )            
     return result
 
-
+"""deprecated
 def update_reference_map_with_table(tablename, force_update=False):
     table = db[tablename]
     
@@ -60,11 +61,12 @@ def update_reference_map_with_table(tablename, force_update=False):
             refs[from_._tablename][tablename].append( from_.name )
             
     return refs        # save in singleton or so
+"""
     
 def db_reference_map():
     # should be used as singleton -- might cache or store in session?
     # but invalidated or updated on table alias!  (after db.tablenames.append( tablename ))
-    
+    db = gluon_current.db
     return{ x: find_references_and_fkeys(x) for x in db.tables }
      
  
@@ -77,6 +79,7 @@ def find_or_check_connection( A, B, A_field=None, B_field=None ):
     Returns pair/tuple:   A_field,  B_field
     One of fields can be given, then we look for the missing one.
     """
+    db = gluon_current.db
     
     def make_sure__single_ref( refs ):
         ref_count = ( len(refs) )
@@ -140,7 +143,7 @@ from gluon.dal import Expression, Table, Query
 # from gluon.packages.dal.pydal._globals import  DEFAULT
 # from gluon.dal import Expression
 
-def build_joins_chain( path ):
+def build_joins_chain( *path ):
     """
     first item in path is supposed to come from initial query/select
     Path can contain table|field names (see subfunction parse(..))
@@ -189,6 +192,7 @@ def build_joins_chain( path ):
     >>> ( build_joins_chain( ['auth_user', db.auth_membership, db.auth_group.on(db.auth_group.id == db.auth_membership.group_id), db.auth_permission.group_id]) )
     
     """
+    db = gluon_current.db
     
     if len(path) < 2: raise ValueError("There should be at least 2 tables mentioned in %s" % path )
     
