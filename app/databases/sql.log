@@ -53,3 +53,7 @@ CREATE TABLE "auth_cas"(
     "renew" CHAR(1)
 );
 success!
+success!
+success!
+success!
+success!

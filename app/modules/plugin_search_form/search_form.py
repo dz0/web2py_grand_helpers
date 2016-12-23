@@ -184,8 +184,16 @@ def SearchForm(
         if filter_value:
             q = filter.query_function( filter_value ) # produce query
             
-            db = current.db # defined in models
-            if filter.target_expression.op == db._adapter.AGGREGATE:
+            # db = current.db # defined in models
+            # print("DBG current.db adapter models", db._adapter)
+            # db = filter.target_expression._db
+            db = filter.target_expression.db
+            # print("DBG target_expression.db adapter models", db._adapter)
+            # print( "DBG DB adapter.AGGREGATE", db._adapter.AGGREGATE )
+            # print( "DBG DB adapter.COUNT", db._adapter.COUNT )
+            # print( "DBG DB expression.op", filter.target_expression.op )
+            
+            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
             # if filter.target_is_aggregate:  # with this works OK
                 # print("DBG db.adapter", dir(db._adapter))
                 queries_4aggregates.append(  q ) 
