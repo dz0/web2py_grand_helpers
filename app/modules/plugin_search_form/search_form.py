@@ -35,7 +35,7 @@ search_options = {
 """
     
           
-def queryFilter(field=None, comparison=None, name_extension=None,  # for smart way
+def SearchField(field=None, comparison=None, name_extension=None,  # for smart way
                 
                 # for customisation
                 name=None,  #  name of input -- to ovveride field name
@@ -147,28 +147,48 @@ def queryFilter(field=None, comparison=None, name_extension=None,  # for smart w
                   )
     
     
+
 def SearchForm(
-        *filters
+         *filters,  # SearchField list (or table for SOLIDForm)
+         **kwargs
         # *components, **attributes
     ):
+        
     # FORM
-    fields = []
     formname = "Search_form_"
-    for filter in filters:
-        if filter.field:
-            # filter.field.writable = True
-            # filter.field.readable = True
-            fields.append( filter.field )
-            print( "DBG field name:", filter.field.name )
-            formname += filter.field.name
-        else:
-            raise RuntimeError("need to define input")
     
-    form = SQLFORM.factory(
+    flattened_filters = []  # will be needed for query construction
+    
+    def extract_fields( filters ):  # works recursively
+        fields = []
+
+        for filter in filters:
+            
+            if isinstance(filter, (list, tuple)):  # if we get a row of filters
+                fields.append( extract_fields( filter  ))  # apply recursively
+            else:            # simple search_field
+                field = filter.field
+                # field.writable = True
+                # field.readable = True            
+                fields.append( field )
+                # print( "DBG field name:", field.name )
+                formname += field.name
+                flattened_filters.append( filter )
+        
+        return fields
+        
+    fields = extract_fields( filters )
+    
+    
+    formname = kwargs.get('formname', formname )
+    form_factory = kwargs.get('form_factory', SQLFORM.factory )
+    
+    form = form_factory(
         *fields, 
         keepvalues=True,
         table_name = "Search_form_",
-        formname = formname
+        formname = formname,
+        **kwargs # TODO: maybe remove formfactory and formname (if present)...  
     )
     
     form.process(keepvalues=True)
@@ -179,7 +199,7 @@ def SearchForm(
 
     queries = []
     queries_4aggregates = []
-    for filter in filters:
+    for filter in flattened_filters:
         filter_value =  current.request.vars.get( filter.field.name, None )
         if filter_value:
             q = filter.query_function( filter_value ) # produce query
@@ -193,7 +213,8 @@ def SearchForm(
             # print( "DBG DB adapter.COUNT", db._adapter.COUNT )
             # print( "DBG DB expression.op", filter.target_expression.op )
             
-            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
+            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]\
+            or db._adapter.dialect and filter.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
             # if filter.target_is_aggregate:  # with this works OK
                 # print("DBG db.adapter", dir(db._adapter))
                 queries_4aggregates.append(  q ) 

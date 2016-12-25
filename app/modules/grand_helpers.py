@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+# TODO: use Rows.render instead of "represent" for each field...
+
 def get_fields_from_format(format_txt):  # TODO
     """
     >>> get_format_fields( '%(first_name)s %(last_name)s' )
