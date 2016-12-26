@@ -121,6 +121,22 @@ def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
                     groupby=db.auth_user.first_name , 
                  )     
 
+def testgrand_SOLIDFORM():
+# based on def test3_fields_from_different_tables(): # OK
+    from applications.app.modules.solidform import SOLIDFORM
+    # from applications.app.modules.searching import search_form as grand_search_form
+
+    search = SearchForm(
+        [ SearchField( db.auth_user.first_name ),       SearchField( db.auth_user.email ) ],
+        [ SearchField( db.auth_group.role ), ],
+        form_factory = SOLIDFORM.factory,
+        formstyle='table3cols'
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
+                    left = build_joins_chain( db.auth_user, db.auth_membership, db.auth_group ),
+                 )     
+
 
 def testgrand_technology_with_good():
     # db.technology.sku.name = "bla.bla"  # IGNORUOJA laukus, su tašku pavadinime

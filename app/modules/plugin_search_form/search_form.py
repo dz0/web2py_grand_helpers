@@ -155,11 +155,12 @@ def SearchForm(
     ):
         
     # FORM
-    formname = "Search_form_"
     
-    flattened_filters = []  # will be needed for query construction
+    
+    flattened_filters = []  # will be needed for query construction -- populated in "extract_fields" recursion
     
     def extract_fields( filters ):  # works recursively
+        
         fields = []
 
         for filter in filters:
@@ -172,15 +173,14 @@ def SearchForm(
                 # field.readable = True            
                 fields.append( field )
                 # print( "DBG field name:", field.name )
-                formname += field.name
                 flattened_filters.append( filter )
         
         return fields
         
     fields = extract_fields( filters )
-    
-    
-    formname = kwargs.get('formname', formname )
+
+    proposed_formname = "Search_form__"+ '_'.join([filter.field.name for filter in flattened_filters]) # constructs dumb form name..
+    formname = kwargs.get('formname', proposed_formname )
     form_factory = kwargs.get('form_factory', SQLFORM.factory )
     
     form = form_factory(
@@ -213,9 +213,11 @@ def SearchForm(
             # print( "DBG DB adapter.COUNT", db._adapter.COUNT )
             # print( "DBG DB expression.op", filter.target_expression.op )
             
-            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]\
-            or db._adapter.dialect and filter.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
-            # if filter.target_is_aggregate:  # with this works OK
+            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
+            # or db._adapter.dialect and filter.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
+                filter.target_is_aggregate  # overrides default
+            
+            if filter.target_is_aggregate:  # with this works OK
                 # print("DBG db.adapter", dir(db._adapter))
                 queries_4aggregates.append(  q ) 
             else:

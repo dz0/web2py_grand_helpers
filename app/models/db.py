@@ -5,8 +5,9 @@
 # File is released under public domain and you can use without limitations
 # -------------------------------------------------------------------------
 
-if request.global_settings.web2py_version < "2.14.1":
-    raise HTTP(500, "Requires web2py 2.13.3 or newer")
+# if request.global_settings.web2py_version < "2.14.1":
+    # raise HTTP(500, "Requires web2py 2.13.3 or newer")
+
 
 # -------------------------------------------------------------------------
 # if SSL/HTTPS is properly configured and you want all HTTP requests to
@@ -28,10 +29,12 @@ if not request.env.web2py_runtime_gae:
     # ---------------------------------------------------------------------
     # if NOT running on Google App Engine use SQLite or other DB
     # ---------------------------------------------------------------------
-    db = DAL(myconf.get('db.uri'),
-             pool_size=myconf.get('db.pool_size'),
-             migrate_enabled=myconf.get('db.migrate'),
-             check_reserved=['all'])
+    # db = DAL(myconf.get('db.uri'),
+             # pool_size=myconf.get('db.pool_size'),
+             # migrate_enabled=myconf.get('db.migrate'),
+             # check_reserved=['all'])
+    db = DAL('sqlite://storage.sqlite', migrate_enabled=True)
+
 else:
     # ---------------------------------------------------------------------
     # connect to Google BigTable (optional 'google:datastore://namespace')
@@ -56,7 +59,7 @@ response.generic_patterns = ['*'] if request.is_local else []
 # -------------------------------------------------------------------------
 # choose a style for forms
 # -------------------------------------------------------------------------
-response.formstyle = myconf.get('forms.formstyle')  # or 'bootstrap3_stacked' or 'bootstrap2' or other
+response.formstyle = myconf.get('forms.formstyle')  or 'bootstrap3_inline' #  or 'bootstrap3_stacked' or 'bootstrap2' or other
 response.form_label_separator = myconf.get('forms.separator') or ''
 
 # -------------------------------------------------------------------------
@@ -82,8 +85,15 @@ response.form_label_separator = myconf.get('forms.separator') or ''
 
 from gluon.tools import Auth, Service, PluginManager
 
+	
 # host names must be a list of allowed host names (glob syntax allowed)
-auth = Auth(db, host_names=myconf.get('host.names'))
+if request.global_settings.web2py_version < "2.14.1":
+    
+    auth = Auth(db,signature=False)
+    auth.define_tables(username=False,signature=False)
+else:
+    auth = Auth(db, host_names=myconf.get('host.names'))
+    
 service = Service()
 plugins = PluginManager()
 
