@@ -57,3 +57,70 @@ success!
 success!
 success!
 success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+timestamp: 2016-12-29T15:04:52.193870
+CREATE TABLE item(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    unit_price DOUBLE,
+    quantity INTEGER
+);
+success!
+timestamp: 2016-12-29T22:11:49.037193
+ALTER TABLE item ADD aaa CHAR(512);
+timestamp: 2016-12-29T22:11:49.089197
+ALTER TABLE item ADD bbb CHAR(512);
+success!
+timestamp: 2016-12-29T22:22:49.114168
+ALTER TABLE item ADD name CHAR(512);
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!
+success!

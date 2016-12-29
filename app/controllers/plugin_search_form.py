@@ -8,13 +8,19 @@ TEST SEARCH FILTERS QUERY from FORM
 """
 
 def tester(search, selected_fields, **kwargs):
-    # data = SQLFORM.grid((db.auth_user.id < 5) & search.query, fields=selected_fields, **kwargs )  # can toggle
     if search.having: 
         kwargs['having'] = search.having  # for aggregates
+     
+    main_table = selected_fields[0].table
+    # search.query &= (db.auth_user.id < 5)  
+    if search.query==True: search.query = main_table.id > 0
         
-    # sql = db((db.auth_user.id < 5) & search.query)._select( *selected_fields, **kwargs )    
-    # print( "DBG SQL: ", sql )
-    data = db((db.auth_user.id < 5) & search.query).select( *selected_fields, **kwargs )    
+    sql = db(search.query)._select( *selected_fields, **kwargs )    
+    print( "DBG SQL: ", sql )
+    
+    data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
+    # data = db(search.query).select( *selected_fields, **kwargs )    
+    
     menu4tests()
     return dict( data = data, 
                 sql = XML(str(db._lastsql[0]).replace('HAVING', "<br>HAVING").replace('WHERE', "<br>WHERE").replace('AND', "<br>AND").replace('LEFT JOIN', '<BR/>LEFT JOIN ')), 
@@ -31,6 +37,53 @@ def test1_simple_fields(): # OK
     )
     return tester(  search, 
                     selected_fields=[db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
+
+
+def def_demo_table():
+    db.define_table('item',
+                        Field('unit_price', 'double'),
+                        Field('quantity', 'integer'),
+                        Field('name'),
+                        )
+         
+    # from gluon.contrib.populate import populate
+    # populate(db['item'],5)  ; db.commit()
+               
+def test_virtual_field(): # ?
+    def_demo_table()
+    db.item.total_price =  Field.Virtual('total_price', lambda row: row.item.unit_price * row.item.quantity)
+
+    grid = SQLFORM.grid(db.item, fields=[db.item.unit_price, db.item.total_price, db.item.quantity ] ) 
+    
+    return dict(grid=grid)
+    
+def test9_simple_with_virtual_fields(): # ?
+
+    def_demo_table()
+    
+    search = SearchForm(
+        SearchField( db.item.name),
+        SearchField( db.item.quantity, '<' )
+    )
+    
+
+    db.item.total_price =  Field.Virtual('total_price', lambda row: row.item.unit_price * row.item.quantity)
+    
+    selected_fields=[db.item.name, db.item.quantity, db.item.total_price ] 
+    
+    # extra fields,  needed to calculate  "db.item.total_price"
+    extra_fields_4virtual = [ db.item.unit_price ]  #
+    for f in set(extra_fields_4virtual)-set(selected_fields): 
+        f.readable = False
+    selected_fields += extra_fields_4virtual
+    
+    
+    # http://web2py.com/books/default/chapter/29/06/the-database-abstraction-layer?search=virtual#New-style-virtual-fields
+    return tester(  search, 
+                    
+                    selected_fields=selected_fields
+                    # selected_fields=[db.item.ALL ]  # doesn't work for grid
                  ) 
 
 def test2_same_fields_twice(): # OK
@@ -108,7 +161,7 @@ def test7_reference_by_anonymous_field(): # OK
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name] ,
                  )     
 
-def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
+def test8_aggregate(): # OK;  BUT: PROBLEM with grid  TODO: automatically detect if target_is_aggregate
     
     search = SearchForm(
         SearchField( Field( "count_user_groups", 'integer'), '>', target_expression=db.auth_group.id.count(), target_is_aggregate=True ),
@@ -121,16 +174,34 @@ def test8_aggregate(): # OK;   TODO: automatically detect if target_is_aggregate
                     groupby=db.auth_user.first_name , 
                  )     
 
-def testgrand_SOLIDFORM():
-# based on def test3_fields_from_different_tables(): # OK
+def testgrand_SOLIDFORM(): # OK
+    # based on def test3_fields_from_different_tables(): 
     from applications.app.modules.solidform import SOLIDFORM
-    # from applications.app.modules.searching import search_form as grand_search_form
-
+    
     search = SearchForm(
         [ SearchField( db.auth_user.first_name ),       SearchField( db.auth_user.email ) ],
         [ SearchField( db.auth_group.role ), ],
         form_factory = SOLIDFORM.factory,
         formstyle='table3cols'
+    )
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
+                    left = build_joins_chain( db.auth_user, db.auth_membership, db.auth_group ),
+                 )     
+
+def testgrand_search_form_4grid():  # TODO
+    # based on def test3_fields_from_different_tables(): 
+    from applications.app.modules.searching import search_form as grand_search_form
+    
+    def my_grand_search_form(*fields, **kwargs):
+        return grand_search_form('testgrand_search_form_4grid', *fields, **kwargs)
+            
+
+    search = SearchForm(
+        [ SearchField( db.auth_user.first_name ),       SearchField( db.auth_user.email ) ],
+        [ SearchField( db.auth_group.role ), ],
+        formstyle='table3cols',
+        form_factory = my_grand_search_form
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_group.role ] ,
