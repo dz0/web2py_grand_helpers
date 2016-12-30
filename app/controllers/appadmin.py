@@ -10,7 +10,6 @@ import datetime
 import copy
 import gluon.contenttype
 import gluon.fileutils
-from gluon._compat import iteritems
 
 try:
     import pygraphviz as pgv
@@ -213,7 +212,7 @@ def select():
 
     if is_imap:
         step = 3
-
+ 
     stop = start + step
 
     table = None
@@ -268,7 +267,7 @@ def select():
             else:
                 rows = db(query, ignore_common_filters=True).select(
                     *fields, limitby=(start, stop))
-        except Exception as e:
+        except Exception, e:
             import traceback
             tb = traceback.format_exc()
             (rows, nrows) = ([], 0)
@@ -287,7 +286,7 @@ def select():
             import_csv(db[request.vars.table],
                        request.vars.csvfile.file)
             response.flash = T('data uploaded')
-        except Exception as e:
+        except Exception, e:
             response.flash = DIV(T('unable to parse csv file'), PRE(str(e)))
     # end handle upload csv
 
@@ -409,7 +408,7 @@ def ccache():
     import copy
     import time
     import math
-    from pydal.contrib import portalocker
+    from gluon import portalocker
 
     ram = {
         'entries': 0,
@@ -421,7 +420,7 @@ def ccache():
         'oldest': time.time(),
         'keys': []
     }
-
+    
     disk = copy.copy(ram)
     total = copy.copy(ram)
     disk['keys'] = []
@@ -455,7 +454,7 @@ def ccache():
         except (KeyError, ZeroDivisionError):
             ram['ratio'] = 0
 
-        for key, value in iteritems(cache.ram.storage):
+        for key, value in cache.ram.storage.iteritems():
             if hp:
                 ram['bytes'] += hp.iso(value[1]).size
                 ram['objects'] += hp.iso(value[1]).count
@@ -465,7 +464,8 @@ def ccache():
             ram['keys'].append((key, GetInHMS(time.time() - value[0])))
 
         for key in cache.disk.storage:
-            if key == 'web2py_cache_statistics' and isinstance(value[1], dict):
+            value = cache.disk.storage[key]
+            if isinstance(value[1], dict):
                 disk['hits'] = value[1]['hit_total'] - value[1]['misses']
                 disk['misses'] = value[1]['misses']
                 try:
@@ -481,7 +481,7 @@ def ccache():
                     disk['oldest'] = value[0]
                 disk['keys'].append((key, GetInHMS(time.time() - value[0])))
 
-        ram_keys = list(ram) # ['hits', 'objects', 'ratio', 'entries', 'keys', 'oldest', 'bytes', 'misses']
+        ram_keys = ram.keys() # ['hits', 'objects', 'ratio', 'entries', 'keys', 'oldest', 'bytes', 'misses']
         ram_keys.remove('ratio')
         ram_keys.remove('oldest')
         for key in ram_keys:

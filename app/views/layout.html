@@ -24,13 +24,35 @@
     <link rel="stylesheet" href="{{=URL('static','css/web2py-bootstrap3.css')}}"/>
     <link rel="shortcut icon" href="{{=URL('static','images/favicon.ico')}}" type="image/x-icon">
     <link rel="apple-touch-icon" href="{{=URL('static','images/favicon.png')}}">
+    
+     <!-- include stylesheets -->
+  {{  
+  response.files.append(URL('static', 'core/css/paginator.css'))
+  response.files.append(URL('static', 'w2ui/w2ui-1.4.3.min.css'))
+
+  }}
     <!-- All JavaScript at the bottom, except for Modernizr which enables
          HTML5 elements & feature detects -->
     <script src="{{=URL('static','js/modernizr-2.8.3.min.js')}}"></script>
+    <script>var is_mobile = {{ =int(IS_MOBILE) }}</script>
     <!--[if lt IE 9]>
         <script src="{{=URL('static','js/respond-1.4.2.min.js')}}"></script>
         <![endif]-->
     <!-- Favicons -->
+    
+    <!-- include javascripts -->
+  {{
+      response.files.append(URL('static', 'w2ui/w2ui-1.4.3.js'))
+      response.files.append(URL('static', 'core/js/w2ui.js'))
+
+      response.files.append(URL('static', 'serializejson/jquery.serializejson.min.js'))
+      
+  }}
+
+  {{ if not IS_MOBILE: }} {{
+      #response.files.append(URL('static', 'jquery_ui/datepicker-lt.js'))
+  }} {{ pass }}
+  
     {{include 'web2py_ajax.html'}} <!-- this includes jquery.js, calendar.js/.css and web2py.js -->
     {{block head}}{{end}}
     {{

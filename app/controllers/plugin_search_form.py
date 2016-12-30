@@ -15,11 +15,35 @@ def tester(search, selected_fields, **kwargs):
     # search.query &= (db.auth_user.id < 5)  
     if search.query==True: search.query = main_table.id > 0
         
+        
+    
     sql = db(search.query)._select( *selected_fields, **kwargs )    
     print( "DBG SQL: ", sql )
     
+    
+    # SIMPLE DATA
+    def get_data_with_virtual():
+        # filter out virtual fields
+        virtual_fields = []
+        db_expressions = []
+        for f in selected_fields:
+            if isinstance( f, Field.Virtual ):
+               virtual_fields.append( f )
+            else: 
+                db_expressions.append( f )
+        # select        
+        data = db(search.query).select( *db_expressions, **kwargs )   
+        # put back virtual fields
+        for r in data:
+            for vf in virtual_fields:
+                # pass
+                r[vf.name] = vf.f(r) 
+
+        return data
+
+    # GRID
     data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
-    # data = db(search.query).select( *selected_fields, **kwargs )    
+    # data = get_data_with_virtual()
     
     menu4tests()
     return dict( data = data, 
@@ -58,7 +82,34 @@ def test_virtual_field(): # ?
     
     return dict(grid=grid)
     
-def test9_simple_with_virtual_fields(): # ?
+def test9_simple_with_virtual_fields(): # ? TODO: finish
+
+    def_demo_table()
+    
+    search = SearchForm(
+        SearchField( db.item.name),
+        SearchField( db.item.quantity, '<' )
+    )
+    
+    db.item.total_price =  Field.Virtual('total_price', lambda row: row.item.unit_price * row.item.quantity)
+    
+    selected_fields=[db.item.name, db.item.quantity, db.item.total_price ] 
+    
+    # extra fields,  needed to calculate  "db.item.total_price"
+    extra_fields_4virtual = [ db.item.unit_price ]  #
+    for f in set(extra_fields_4virtual)-set(selected_fields): 
+        f.readable = False
+    selected_fields += extra_fields_4virtual
+    
+    # http://web2py.com/books/default/chapter/29/06/the-database-abstraction-layer?search=virtual#New-style-virtual-fields
+    return tester(  search, 
+                    
+                    selected_fields=selected_fields
+                    # selected_fields=[db.item.ALL ]  # doesn't work for grid
+                 ) 
+
+
+def test9b_simple_with_Expr_in_virtual_fields(): # ?  TODO: finish
 
     def_demo_table()
     
@@ -70,10 +121,14 @@ def test9_simple_with_virtual_fields(): # ?
 
     db.item.total_price =  Field.Virtual('total_price', lambda row: row.item.unit_price * row.item.quantity)
     
-    selected_fields=[db.item.name, db.item.quantity, db.item.total_price ] 
+    my_expr =  db.item.unit_price * db.item.quantity
+    my_expr.tablename = 'blah'
+    db.item.vfield_expr =  Field.Virtual('vfield_expr', lambda row: row[my_expr] )
+    
+    selected_fields=[db.item.name, db.item.quantity, db.item.total_price, db.item.vfield_expr  ] 
     
     # extra fields,  needed to calculate  "db.item.total_price"
-    extra_fields_4virtual = [ db.item.unit_price ]  #
+    extra_fields_4virtual = [ db.item.unit_price, my_expr ]  #
     for f in set(extra_fields_4virtual)-set(selected_fields): 
         f.readable = False
     selected_fields += extra_fields_4virtual
@@ -85,6 +140,7 @@ def test9_simple_with_virtual_fields(): # ?
                     selected_fields=selected_fields
                     # selected_fields=[db.item.ALL ]  # doesn't work for grid
                  ) 
+
 
 def test2_same_fields_twice(): # OK
     search = SearchForm(
@@ -118,6 +174,19 @@ def test4_expr_custom_fields(): # OK
     )
     return tester(  search, 
                     selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
+
+def test4b_expr_custom_fields_expr_in_columns(): # OK
+    search = SearchForm(
+        # SearchField( db.auth_user.first_name, 'contains' ),
+        SearchField( Field( "first_name__custom"),  target_expression=db.auth_user.first_name  ),
+        SearchField( Field( "first_name__custom2"), '<',  target_expression=db.auth_user.first_name  ),
+    )
+    
+    expr = db.auth_user.first_name + db.auth_user.email
+    expr.tablename = db.auth_user
+    return tester(  search, 
+                    selected_fields=[ db.auth_user.id, db.auth_user.first_name, db.auth_user.email, expr ] 
                  ) 
 
 def test5_expr_combination_of_fields(): # OK...
