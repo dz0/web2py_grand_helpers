@@ -10,6 +10,9 @@ IS_MOBILE = bool(int(IS_MOBILE)) if IS_MOBILE else request.user_agent().is_mobil
 def DBG():
     return request.controller == 'maintenance' 
 
+
+# from helpers import TOTAL_ROWS
+TOTAL_ROWS = "42" # :)
 ######################################
 #
 # for testing (based on grand3 stuff)
