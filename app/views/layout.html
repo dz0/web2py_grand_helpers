@@ -44,6 +44,7 @@
   {{
       response.files.append(URL('static', 'w2ui/w2ui-1.4.3.js'))
       response.files.append(URL('static', 'core/js/w2ui.js'))
+      response.files.append(URL('static', 'core/js/searching.js'))
 
       response.files.append(URL('static', 'serializejson/jquery.serializejson.min.js'))
       
@@ -54,6 +55,8 @@
   }} {{ pass }}
   
     {{include 'web2py_ajax.html'}} <!-- this includes jquery.js, calendar.js/.css and web2py.js -->
+   {{include 'translation/translation.html'}}
+
     {{block head}}{{end}}
     {{
     # using sidebars need to know what sidebar you want to use

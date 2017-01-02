@@ -1,5 +1,6 @@
 from gluon import current
 current.db = db
+current.auth = auth
 
 SEARCHING_GRID = 'searching/searching_grid.html'
 
@@ -8,11 +9,13 @@ IS_MOBILE = 0
 IS_MOBILE = bool(int(IS_MOBILE)) if IS_MOBILE else request.user_agent().is_mobile
 
 def DBG():
-    return request.controller == 'maintenance' 
+    return request.controller == 'plugin_w2ui_grid' # 'maintenance' 
+
+current.DBG = DBG  # TODO -- move to requests.DBG or request.vars.DBG
 
 
 # from helpers import TOTAL_ROWS
-TOTAL_ROWS = "42" # :)
+
 ######################################
 #
 # for testing (based on grand3 stuff)
