@@ -2,13 +2,13 @@
 from plugin_search_form.search_form import SearchField, SearchForm
 from plugin_joins_builder.joins_builder import build_joins_chain 
 from plugin_w2ui_grid.w2ui_grid import w2ui_grid  , w2ui_colname, w2ui_colname_decode
+from plugin_w2ui_grid.w2ui_grid import inject_attrs
 
 
 from gluon.sqlhtml import represent
 from gluon.storage import Storage
 from pydal.objects import Field, Expression, Table
 
-from helpers import (action_button, expandable_form_fields, expandable_section, FORM_SEPARATOR, random_password, represent_boolean)
 from searching import search_form
 from lib.w2ui import make_orderby, save_export, serialized_lists
 from applications.app.modules.searching import search_form
@@ -39,21 +39,30 @@ def test():
     )
 
     # GRID COLUMNS MODEL -- fields_4columns
-    fields_4virtual = [ ]
 
-    db.auth_user.reversed_name =  Field.Virtual('reversed_name', 
-                                                lambda row, ctx=None: row.auth_user.first_name[::-1]
-                                  ); fields_4virtual.extend([db.auth_user.first_name ]) # try to define dependancies together
+    # Virtual Field
+    reversed_name =  inject_attrs(
+                        # db.auth_user.reversed_name =  Field.Virtual('reversed_name',  
+                        Field.Virtual('reversed_name',  # it can be anonymous, but for SQLFORM.grid it requires table_name
+                                lambda row, ctx=None: row.auth_user.first_name[::-1]
+                        ),
+                        needs_data = [db.auth_user.first_name ], 
+                        #joins = None, left = None
+                      ) 
+                               
     
+    # Expression
     full_name = db.auth_user.first_name+" "+db.auth_user.last_name # Expression
-    full_name.label = "Full name"
+    full_name.label = "Full name" # or could use inject_attrs 
+    full_name.represent = lambda val, row: ("Mrs. " if row[db.auth_user.first_name].endswith('a') else "Mr. ") +val  # demo of represent injection
+    #full_name.join = None 
     
     fields_4columns=[   
                         db.auth_user.id,
                         db.auth_user.last_name,
-                        db.auth_user.reversed_name,
+                        reversed_name,
                         full_name,
-                        db.auth_user.email ,
+                        inject_attrs( db.auth_user.email, represent4export=lambda val: val.upper() ),
                     ] 
 
     def whole_page():
@@ -91,7 +100,6 @@ def test():
         return w2ui_grid(
                         search.query,   
                         fields_4columns=fields_4columns, 
-                        fields_4virtual=fields_4virtual, 
                         after_select_before_render=after_select_before_render,
                         represent4export=represent4export, 
                         data_name=data_name, 
@@ -103,8 +111,6 @@ def test():
     else:
         return whole_page()
 
-def test5_Expression():
-    pass
 
 
 # @auth.requires_permission('list', 'user')
@@ -142,8 +148,6 @@ def testgrand_users():
     
         
     # FIELDS 
-    # fields_4virtual = [    db.auth_user.color  ]
-    fields_4virtual = [ ]
 
     db.auth_user.reversed_name =  Field.Virtual('reversed_name', 
                                                 lambda row, ctx=None: row.auth_user.first_name[::-1]
@@ -178,7 +182,6 @@ def testgrand_users():
         stuff = w2ui_grid(
                         search.query,   
                         fields_4columns=fields_4columns, 
-                        fields_4virtual=fields_4virtual, 
                         represent4export=represent4export, 
                         after_select_before_render=after_select_before_render,
                         data_name=data_name, 

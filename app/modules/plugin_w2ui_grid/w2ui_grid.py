@@ -5,7 +5,7 @@ from gluon.sqlhtml import represent
 from gluon.storage import Storage
 from pydal.objects import Field, Expression, Table
 
-from helpers import (action_button, expandable_form_fields, expandable_section, FORM_SEPARATOR, random_password, represent_boolean)
+from helpers import represent_boolean, represent_datetime # action_button
 from lib.w2ui import make_orderby, save_export, serialized_lists
 
 
@@ -17,27 +17,39 @@ def w2ui_colname( field ):
 def w2ui_colname_decode( field ):
     """because w2ui interprets '.' more than needed"""
     return str(field).replace(':', '.')
+
+def inject_attrs(obj, override=False, **kw):
+    for key, val in kw.items():
+        if not hasattr(obj, key):
+            setattr(obj, key, val)
+        elif override:
+            setattr(obj, key, val)
+        else:
+            raise AttributeError("inject_attrs does'nt know what to do: " + str((obj, override, key, val)) )
+    return obj
     
-# def unpack_w2ui_colname( name ):
-    # if ':' in name:
-        # table_name, field_name = name.split(':')
-        # return table_name, field_name 
-     
+
 # @auth.requires_signature()
 def w2ui_grid(query, 
             fields_4columns ,  # list of :  Field, Expression or VirtualField 
-            fields_4virtual=[],  # extra fields, needed to calculate virtual fields 
+            
+            
             left=None, join=None, groupby=None, having=None, 
-            represent4export={},    #  overrides representation  for csv -- mapping colnames to functions
-            after_select_before_render=None, # maybe some extra requests... -- must return a dictionary!
+            after_select_before_render=None, # function with some extra requests or so... -- must return a dictionary!
             data_name=None, # used in has_permission(..)
             table_name=None,
             **kwargs
             ):
                 
+    """
+    items in fields_4columns can have special attributes:
+        - represent4export   #  overrides representation  for csv -- mapping colnames to functions
+        - needed_data    # list of expressions needed to be fetched by select for Field.Virtual   
+    """
+                
     request = current.request
     db = current.db
-    DBG = current.DBG
+    DBG = current.DBG   # FIXME
     if DBG(): 
         MSG_NO_PERMISSION = ('Insufficient privileges')
         TOTAL_ROWS = '42' # "count(*)" # :)
@@ -48,7 +60,7 @@ def w2ui_grid(query,
 
     table_name = table_name or fields_4columns[0]._tablename 
     data_name = data_name or table_name or request.controller 
-  
+
     ctx.update(kwargs)
 
     status = 'success'
@@ -63,15 +75,19 @@ def w2ui_grid(query,
         extra = serialized_lists(request.vars)  # sort, search
     
         if 'sort' in extra:
+            # TODO FIXME : doesn't work for expressions 
             fields_mapping = { x['field']:w2ui_colname_decode(x['field'])  for x in extra['sort'] }
-            orderby = make_orderby(db, extra['sort'], fields_mapping=fields_mapping)
+            
+            orderby = make_orderby(db, extra['sort'], fields_mapping=fields_mapping)   
         else:
             orderby = None
 
-
+        virtual_fields = [f for f in fields_4columns   if isinstance( f, Field.Virtual )]
+        fields_4virtual= [d for f in virtual_fields for d  in f.needs_data    ] # extraxt  fields/expressions, needed to calculate virtual fields 
+        
         fields_4select = [f for f in fields_4columns if isinstance( f, (Field, Expression) ) ] # ignores Field.Virtual's
-        fields_4select += fields_4virtual
         # if fields_4select == []: fields_4select = db[request.controller].ALL  # RISKY
+        fields_4select += fields_4virtual
 
         ###############   SELECT  #################### 
         
@@ -123,11 +139,17 @@ def w2ui_grid(query,
 
     def export_records():
         for field in fields_4columns:
-            if w2ui_colname(field) in represent4export:
-                field.represent = represent4export[ w2ui_colname(field) ]
+            # if w2ui_colname(field) in represent4export:
+                # field.represent = represent4export[ w2ui_colname(field) ]
+            if hasattr(field, 'represent4export'):
+                field.represent = getattr( field, 'represent4export' )
+            elif field.type == 'boolean':
+                field.represent = lambda val: represent_boolean(val, html=False)
+            elif field.type == 'datetime':
+                field.represent = lambda val: represent_datetime(val, html=False, empty='')
                 # was sth like:    
-                # db.auth_user.active.represent = lambda value: represent_boolean(value, html=False)
-                # TODO: could do automatically for common types (boolean, datetime...)
+            # db.auth_user.active.represent = lambda value: represent_boolean(value, html=False)
+            # TODO: could do automatically for common types (boolean, datetime...)
 
         records = select_and_render_records()
         
@@ -164,14 +186,16 @@ def w2ui_grid(query,
         for field in fields_4columns:
             if isinstance( field, Field.Virtual ):
                 rendered = field.f( row , ctx=ctx)
-            elif isinstance( field, Field  ):
+            elif isinstance( field, Field ):
                 rendered = represent(
                                 field,
                                 row[field._tablename][field.name],
                                 row[field._tablename] 
                             )  
-            else:  # simple Expression or so..
-                rendered = row['_extra'][field]    # ?? maybe in _extra?
+            elif isinstance( field, Expression ): # for Expression with such attr 
+                rendered = represent (field, row[field], row )  
+                
+                rendered = row['_extra'][field]    # TODOL FIXME: test it?? maybe in _extra?
         
             result[ w2ui_colname(field) ] = rendered
             

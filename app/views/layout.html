@@ -29,6 +29,7 @@
   {{  
   response.files.append(URL('static', 'core/css/paginator.css'))
   response.files.append(URL('static', 'w2ui/w2ui-1.4.3.min.css'))
+  response.files.append(URL('static', 'jquery_ui/jquery-ui.min.css'))
 
   }}
     <!-- All JavaScript at the bottom, except for Modernizr which enables
@@ -42,11 +43,49 @@
     
     <!-- include javascripts -->
   {{
+      """
       response.files.append(URL('static', 'w2ui/w2ui-1.4.3.js'))
       response.files.append(URL('static', 'core/js/w2ui.js'))
       response.files.append(URL('static', 'core/js/searching.js'))
-
+      response.files.append(URL('static', 'core/js/form.js'))
+      response.files.append(URL('static', 'core/js/popup.js'))
       response.files.append(URL('static', 'serializejson/jquery.serializejson.min.js'))
+      response.files.append(URL('static', 'jquery_ui/jquery-ui.min.js'))
+      
+      #response.files.append(URL('static', 'elrte/js/elrte.min.js'))
+      response.files.append(URL('static', 'core/js/core.js'))
+      
+      #response.files.append(URL('static', 'core/js/elrte.js'))
+      """
+      
+      response.files.append(URL('static', 'js/bootstrap.min.js'))
+      response.files.append(URL('static', 'jquery_ui/jquery-ui.min.js'))
+      response.files.append(URL('static', 'jquery_form/jquery.form.min.js'))
+      #response.files.append(URL('static', 'bootstrap_datetimepicker/js/bootstrap-datetimepicker.min.js'))
+      #response.files.append(URL('static', 'bootstrap_datetimepicker/js/locales/bootstrap-datetimepicker.lt.js'))
+      response.files.append(URL('static', 'jquery_ui_timepicker_addon/jquery-ui-timepicker-addon.min.js'))
+      response.files.append(URL('static', 'jquery_ui_timepicker_addon/jquery-ui-timepicker-lt.js'))
+      response.files.append(URL('static', 'elrte/js/elrte.min.js'))
+      response.files.append(URL('static', 'core/js/core.js'))
+      response.files.append(URL('static', 'core/js/popup.js'))
+      response.files.append(URL('static', 'core/js/form.js'))
+      response.files.append(URL('static', 'core/js/paginator.js'))
+      response.files.append(URL('static', 'core/js/orderer.js'))
+      response.files.append(URL('static', 'core/js/elrte.js'))
+      response.files.append(URL('static', 'core/js/searching.js'))
+      response.files.append(URL('static', 'doctemplate/js/doctemplate.js'))
+      response.files.append(URL('static', 'translation/js/translation.js'))
+      response.files.append(URL('static', 'widgets/js/select_or_add_option.js'))
+      response.files.append(URL('static', 'widgets/js/select_subject.js'))
+      response.files.append(URL('static', 'moment/moment.min.js'))
+      response.files.append(URL('static', 'w2ui/w2ui-1.4.3.js'))
+      response.files.append(URL('static', 'chosen/chosen.jquery.min.js'))
+      response.files.append(URL('static', 'serializejson/jquery.serializejson.min.js'))
+      response.files.append(URL('static', 'colorpicker/js/evol.colorpicker.min.js'))
+      response.files.append(URL('static', 'core/js/w2ui.js'))
+      response.files.append(URL('static', 'dropzone/dropzone.js'))
+      response.files.append(URL('static', 'clockpicker/bootstrap-clockpicker.min.js'))
+      
       
   }}
 
@@ -111,9 +150,23 @@
 
       <div class="{{=middle_column}}">
         {{block center}}
-        {{include}}
+
+            <div id="form-title">{{ =response.subtitle }}</div>
+                <div id="content">
+                    <!--
+                    <h2>{{ =response.subtitle }}</h2>
+                    -->
+                    {{ include }}
+                </div>
+                <div id="dialogs">
+                </div>
+            </div>
+
+
         {{end}}
       </div>
+      
+              
 
       {{if right_sidebar_enabled:}}
         <div class="col-md-3">

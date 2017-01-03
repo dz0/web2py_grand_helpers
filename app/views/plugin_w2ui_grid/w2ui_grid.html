@@ -10,6 +10,9 @@
             columns: {{=XML(json(w2grid_columns)) }},
 
             sortData: {{=XML(json(w2grid_sort)) }},
+            
+            {{ block w2ui_grid_actions }} 
+            
             show: {
                 {{ if DBG() or auth.has_permission('add', data_name ): }}
                     toolbarAdd: true,
@@ -21,19 +24,39 @@
                     toolbarDelete: true,
                 {{ pass }}
             },
+            
             onAdd: function(event){
-                addUser();
+                // addUser();
+                //ajaxForm_popup(popup_name, title, form_name, url, data, options)
+                ajaxForm_popup(  
+                              "{{ =data_name }}", 
+                              "{{ =T( request.controller +'_'+ data_name +'__add_form' ) }}", 
+                              "add_{{ =data_name }}",
+                              "{{ =URL(request.controller, 'add_' + data_name) }}"
+                               );
+                
             },
             onEdit: function(event){
-                var url = URL({'c': request.controller, 'f': 'edit_'+data_name , 'args[]': [event.recid]});
+                var url = URL({'c': '{{=request.controller}}', 'f': 'edit_'+'{{=data_name}}' , 'args[]': [event.recid]});
                 if (event.newWindow){
                     openTab(url);
                 } else {
                     document.location = url;
                 }
-            }
+        // function editTransferGood(rid){
+            // ajaxForm_popup("good", "{{ =T('warehouse_transfer_good__edit_form') }}", "edit_good",
+                           // URL({c: "warehouse", f: "edit_transfer_good", "args[]": [rid], user_signature: true}));
+        // }                
+            },
+            {{ end }}
+            
+            {{ block w2ui_grid_extra_options }} 
+            {{ end }}
         };
 
+    $(function() {
+        w2ui__grid('{{=cid}}');
+    });
     </script>
 
 {{ end }}
