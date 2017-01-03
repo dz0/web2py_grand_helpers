@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from plugin_search_form.search_form import SearchField, SearchForm
 from plugin_joins_builder.joins_builder import build_joins_chain 
-from plugin_w2ui_grid.w2ui_grid import w2ui_grid  , w2ui_colname, w2ui_colname_decode
+from plugin_w2ui_grid.w2ui_grid import w2ui_grid_data  , w2ui_colname, w2ui_colname_decode
 from plugin_w2ui_grid.w2ui_grid import inject_attrs
 
 
@@ -22,6 +22,9 @@ def populate_users():
     from gluon.contrib.populate import populate
     populate(db['auth_user'],5)  ; db.commit()
 
+def add_user():
+    return "test..."
+    
 def test():  
     
     cid = request.function 
@@ -51,7 +54,11 @@ def test():
                       ) 
                                
     
-    # Expression
+    # Expressions 
+    # oversimplified Expression -- just a field
+    name = inject_attrs( db.auth_user.first_name, label="field as expression", _override=True) 
+
+    # robust expr
     full_name = db.auth_user.first_name+" "+db.auth_user.last_name # Expression
     full_name.label = "Full name" # or could use inject_attrs 
     full_name.represent = lambda val, row: ("Mrs. " if row[db.auth_user.first_name].endswith('a') else "Mr. ") +val  # demo of represent injection
@@ -61,6 +68,7 @@ def test():
                         db.auth_user.id,
                         db.auth_user.last_name,
                         reversed_name,
+                        name,
                         full_name,
                         inject_attrs( db.auth_user.email, represent4export=lambda val: val.upper() ),
                     ] 
@@ -81,29 +89,26 @@ def test():
              ],
             grid_function = request.function,       # or specify other...     
             data_name = data_name , # request.controller could be default       
+            context = request.controller +'_'+ data_name,
+
             w2grid_sort = [  {'field': w2ui_colname(db.auth_user.email), 'direction': "asc"} ]
         )
      
     # @auth.requires_signature()
-    def grid_data():  # uses search.query
+    def grid_data():  # uses search.query  and   fields_4columns 
         
         # optional
         def after_select_before_render(rows, cmd=None, ctx=None):
             return {}  # return new stuff for context  -- might change
                      
-        represent4export = {  # optional
-            # w2ui_colname(db.auth_user.active): lambda value: represent_boolean(value, html=False)
-        } 
+        grid_kwargs_from_search = { key: search.get(key) for key in 'left join groupby having'.split() }
         
-        grid_kwargs = { key: search.get(key) for key in 'left join groupby having'.split() }
-        
-        return w2ui_grid(
+        return w2ui_grid_data(
                         search.query,   
                         fields_4columns=fields_4columns, 
                         after_select_before_render=after_select_before_render,
-                        represent4export=represent4export, 
                         data_name=data_name, 
-                        **grid_kwargs 
+                        **grid_kwargs_from_search 
                         )
                   
     if request.vars._grid == 'True':  

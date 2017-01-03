@@ -18,19 +18,19 @@ def w2ui_colname_decode( field ):
     """because w2ui interprets '.' more than needed"""
     return str(field).replace(':', '.')
 
-def inject_attrs(obj, override=False, **kw):
+def inject_attrs(obj, _override=False, **kw):
     for key, val in kw.items():
         if not hasattr(obj, key):
             setattr(obj, key, val)
-        elif override:
+        elif _override:
             setattr(obj, key, val)
         else:
-            raise AttributeError("inject_attrs does'nt know what to do: " + str((obj, override, key, val)) )
+            raise AttributeError("inject_attrs does'nt know what to do: " + str((obj, _override, key, val)) )
     return obj
     
 
 # @auth.requires_signature()
-def w2ui_grid(query, 
+def w2ui_grid_data(query, 
             fields_4columns ,  # list of :  Field, Expression or VirtualField 
             
             
@@ -192,9 +192,10 @@ def w2ui_grid(query,
                                 row[field._tablename][field.name],
                                 row[field._tablename] 
                             )  
-            elif isinstance( field, Expression ): # for Expression with such attr 
+            elif hasattr( field, 'represent' ): # for Expression with such attr 
+            # elif isinstance( field, Expression ): # would throw error if no represent
                 rendered = represent (field, row[field], row )  
-                
+            else:
                 rendered = row['_extra'][field]    # TODOL FIXME: test it?? maybe in _extra?
         
             result[ w2ui_colname(field) ] = rendered
