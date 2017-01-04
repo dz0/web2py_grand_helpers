@@ -60,6 +60,7 @@ def test():
 
     # robust expr
     full_name = db.auth_user.first_name+" "+db.auth_user.last_name # Expression
+    full_name.name = "full_name" # or could use inject_attrs 
     full_name.label = "Full name" # or could use inject_attrs 
     full_name.represent = lambda val, row: ("Mrs. " if row[db.auth_user.first_name].endswith('a') else "Mr. ") +val  # demo of represent injection
     #full_name.join = None 

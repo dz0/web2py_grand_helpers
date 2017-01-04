@@ -10,13 +10,25 @@ from lib.w2ui import make_orderby, save_export, serialized_lists
 
 
 def w2ui_colname( field ):
-    """because w2ui interprets '.' more than needed"""
-    return str(field).replace('.', ':')
-    # return str(field)
+    """"""
+    
+    if isinstance (field, Expression) and not isinstance (field, Field):
+        result = ""
+        if hasattr(field, 'tablename'):
+            result = field.tablename+"."
+        if hasattr(field, 'name'):
+            result += field.name
+        else:
+            result += str(field)
+    else:
+        result =  str(field)     
+    
+    result = str(result).replace('.', ':')  # because w2ui interprets '.' more than needed
+    result = result.replace("'", "\\'")   # escaping single quote, because w2ui generates some js code putting colnames in single quotes   
+    return result
 
-def w2ui_colname_decode( field ):
-    """because w2ui interprets '.' more than needed"""
-    return str(field).replace(':', '.')
+def w2ui_colname_decode( name ):
+    return name.replace(':', '.').replace("\\'", "'")
 
 def inject_attrs(obj, _override=False, **kw):
     for key, val in kw.items():
@@ -76,7 +88,14 @@ def w2ui_grid_data(query,
     
         if 'sort' in extra:
             # TODO FIXME : doesn't work for expressions 
-            fields_mapping = { x['field']:w2ui_colname_decode(x['field'])  for x in extra['sort'] }
+            def find_expr_by_colname( colname ):
+                for f in fields_4columns:
+                    if type(f)==Expression:
+                        if hasattr(f, 'name') and f.name == colname  \
+                        or hasattr(f, 'label') and f.label == colname:
+                            return str(f)
+                        
+            fields_mapping = { x['field']: find_expr_by_colname(x['field']) or w2ui_colname_decode(x['field'])  for x in extra['sort'] }
             
             orderby = make_orderby(db, extra['sort'], fields_mapping=fields_mapping)   
         else:
