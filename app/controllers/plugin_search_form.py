@@ -54,7 +54,17 @@ def tester(search, selected_fields, **kwargs):
                 query=XML(str(search.query).replace('AND', "<br>AND"))
                 )
     
-def test1_simple_fields(): # OK
+def test0_simple_ordinary_fields(): # OK
+    search = SearchForm(
+         db.auth_user.first_name,
+         db.auth_user.email
+    )
+    return tester(  search, 
+                    selected_fields=[db.auth_user.id, db.auth_user.first_name, db.auth_user.email ] 
+                 ) 
+
+
+def test1_simple_Searchfields(): # OK
     search = SearchForm(
         SearchField( db.auth_user.first_name),
         SearchField( db.auth_user.email )

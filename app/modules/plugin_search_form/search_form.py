@@ -1,6 +1,7 @@
 from gluon.storage import Storage
 from gluon import current
 from gluon.sqlhtml import SQLFORM
+from pydal.objects import Field
 
 """
 helps buid SEARCH FORM  so, that 
@@ -163,11 +164,13 @@ def SearchForm(
         
         fields = []
 
-        for filter in filters:
+        for nr, filter in enumerate(filters):
             
             if isinstance(filter, (list, tuple)):  # if we get a row of filters
                 fields.append( extract_fields( filter  ))  # apply recursively
             else:            # simple search_field
+                if isinstance( filter, Field ):  # if SearchField not applied yet
+                    filter = SearchField( filter ) # apply with defaults
                 field = filter.field
                 # field.writable = True
                 # field.readable = True            
