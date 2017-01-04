@@ -41,7 +41,12 @@ def inject_attrs(obj, _override=False, **kw):
     return obj
     
 
-# @auth.requires_signature()
+def w2ui_columns_define_defaults( fields_4columns ):
+         return [
+                 {'field': w2ui_colname(f), 'caption': f.label, 'size': "100%", 'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
+                 for f in fields_4columns 
+             ]
+
 def w2ui_grid_data(query, 
             fields_4columns ,  # list of :  Field, Expression or VirtualField 
             

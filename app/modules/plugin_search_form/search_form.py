@@ -186,12 +186,16 @@ def SearchForm(
     formname = kwargs.get('formname', proposed_formname )
     form_factory = kwargs.get('form_factory', SQLFORM.factory )
     
+    for key in ["keepvalues", "table_name", "formname", "form_factory"]:
+        if key in kwargs:
+            del kwargs[key]
+    
     form = form_factory(
         *fields, 
         keepvalues=True,
         table_name = "Search_form_",
         formname = formname,
-        **kwargs # TODO: maybe remove formfactory and formname (if present)...  
+        **kwargs 
     )
     
     form.process(keepvalues=True)
