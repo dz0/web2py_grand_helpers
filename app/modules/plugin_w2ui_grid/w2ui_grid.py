@@ -8,6 +8,7 @@ from pydal.objects import Field, Expression, Table
 from helpers import represent_boolean, represent_datetime # action_button
 from lib.w2ui import make_orderby, save_export, serialized_lists
 
+import traceback
 
 def w2ui_colname( field ):
     """"""
@@ -41,16 +42,31 @@ def inject_attrs(obj, _override=False, **kw):
     return obj
     
 
-def w2ui_columns_define_defaults( fields_4columns ):
-         return [
-                 {'field': w2ui_colname(f), 'caption': f.label, 'size': "100%", 'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
-                 for f in fields_4columns 
-             ]
+def define_w2ui_columns( fields_4columns, custom=None ):
+    """ custom -- dictionary of field:params
+    """
+        
+    # default params
+    columns = [
+             {'field': w2ui_colname(f), 'caption': f.label, 'size': "100%", 'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
+             for f in fields_4columns 
+         ]
+         
+    def get_col_params( field ):
+        for params in columns:
+            if params['field'] == w2ui_colname(field):
+                return params
+
+    # custom column parameters
+    # w2ui in parameters stores field as name, but in "custom" dictionary we provide keys as Field -- foreasier call
+    if custom:
+        for field, params in custom.items():
+            get_col_params( field ).update( params )
+    
+    return columns
 
 def w2ui_grid_data(query, 
             fields_4columns ,  # list of :  Field, Expression or VirtualField 
-            
-            
             left=None, join=None, groupby=None, having=None, 
             after_select_before_render=None, # function with some extra requests or so... -- must return a dictionary!
             data_name=None, # used in has_permission(..)
@@ -68,15 +84,23 @@ def w2ui_grid_data(query,
     db = current.db
     DBG = current.DBG   # FIXME
     if DBG(): 
-        MSG_NO_PERMISSION = ('Insufficient privileges')
-        TOTAL_ROWS = '42' # "count(*)" # :)
+        TOTAL_ROWS = '42' # "count(*) over()" # :)
+    else:
+        from helpers import TOTAL_ROWS
+
+    MSG_NO_PERMISSION = current.MSG_NO_PERMISSION
+    MSG_ACTION_FAILED = current.MSG_ACTION_FAILED
+
 
     auth = current.auth
 
     ctx = Storage()   # similar to "self" in object -- instead of "nonlocal"
 
-    table_name = table_name or fields_4columns[0]._tablename 
+    table_name = table_name or fields_4columns[0]._tablename       # with hope, that  fields_4columns[0] is not some Field.Virtual or Expression
     data_name = data_name or table_name or request.controller 
+
+    # id_field is not shown, but kept in grid for edit/delete..
+    id_field = db[table_name]._id 
 
     ctx.update(kwargs)
 
@@ -112,6 +136,7 @@ def w2ui_grid_data(query,
         fields_4select = [f for f in fields_4columns if isinstance( f, (Field, Expression) ) ] # ignores Field.Virtual's
         # if fields_4select == []: fields_4select = db[request.controller].ALL  # RISKY
         fields_4select += fields_4virtual
+        # if not id_field in fields_4select:  fields_4select.append( id_field )
 
         ###############   SELECT  #################### 
         
@@ -130,7 +155,7 @@ def w2ui_grid_data(query,
         # print "DBG sql", sql
         
         ctx.rows = db(query).select(
-            *(fields_4select+[TOTAL_ROWS]), 
+            *(fields_4select+[id_field, TOTAL_ROWS]), 
 
             orderby=orderby,
             limitby=limitby,
@@ -224,17 +249,21 @@ def w2ui_grid_data(query,
         
             result[ w2ui_colname(field) ] = rendered
             
-        id_field = fields_4columns[0]   # if not virtual
-        if str(id_field) != str(id_field.table._id): raise ValueError("not ID field") # TODO
-        result['recid'] = row[id_field] # should be ID! ex, db.auth_user.id
+        result['recid'] = row[id_field] #  ex, db.auth_user.id
         
         return result
         
-      
-    # dispatch by cmd
-    if cmd=='get-records'   : return   get_records()
-    if cmd=='export-records': return export_records()
-    if cmd=='delete-records': return delete_records()
+    
+    try:  
+    # if True:
+        # dispatch by cmd
+        if cmd=='get-records'   : return   get_records()
+        if cmd=='export-records': return export_records()
+        if cmd=='delete-records': return delete_records()
 
-    return {'status': status}  # default
+        return {'status': status}  # default
+    except Exception as e:
+        return   { 'status':"error",  'message':str(e)+traceback.format_exc() }
+    
 
+ 

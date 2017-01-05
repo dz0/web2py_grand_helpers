@@ -220,7 +220,7 @@ def SearchForm(
             # print( "DBG DB adapter.COUNT", db._adapter.COUNT )
             # print( "DBG DB expression.op", filter.target_expression.op )
             
-            if filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
+            if db and filter.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
             # or db._adapter.dialect and filter.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
                 filter.target_is_aggregate  # overrides default
             
