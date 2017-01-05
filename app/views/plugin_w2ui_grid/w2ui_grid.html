@@ -6,7 +6,7 @@
     <script type="text/javascript">
 
         var {{=cid}}__w2grid_options = {
-            url: "{{ =URL(request.controller, grid_function+'.json', vars={'_grid':True, 'data_name':data_name}, user_signature=False) }}",
+            url: "{{ =URL(request.controller, grid_function+'.json', vars={'_grid':True, 'data_name':data_name}, user_signature=True) }}",
             columns: {{=XML(simplejson.dumps(w2grid_columns, default=custom_json, indent=4)) }},
 
             sortData: {{=XML(simplejson.dumps(w2grid_sort,  default=custom_json, indent=4)) }},

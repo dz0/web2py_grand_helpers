@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+# versijų palyginimas https://docs.google.com/document/d/1BEUqSpBhQx781L-HMDxN5A2S2_4GaEmAsFTbS8h8sZU/edit
+
 from plugin_search_form.search_form import SearchField, SearchForm
 from plugin_joins_builder.joins_builder import build_joins_chain 
 from plugin_w2ui_grid.w2ui_grid import w2ui_grid_data, w2ui_colname, define_w2ui_columns
@@ -13,8 +16,8 @@ from searching import search_form
 from lib.w2ui import make_orderby, save_export, serialized_lists
 from applications.app.modules.searching import search_form
 
-
-# @auth.requires_permission('list', 'user')
+@auth.requires_permission('list', 'user')
+# @auth.requires_signature()
 def users():  
 
     filters = [
@@ -55,7 +58,6 @@ def users():
     )
 
     # GRID COLUMNS MODEL -- fields_4columns
-
     
     fields_4columns=[   
                 # db.auth_user.id,
