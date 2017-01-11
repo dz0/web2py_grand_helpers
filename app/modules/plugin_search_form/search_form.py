@@ -242,7 +242,7 @@ def SearchForm(
         having = None
     
     
-    return Storage( form=form, query=query, having=having )
+    return Storage( form=form, query=query, having=having, fields=flattened_filters )
 
 
 
