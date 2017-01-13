@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from plugin_search_form.search_form import SearchField, SearchForm
-from plugin_joins_builder.joins_builder import build_joins_chain  # uses another grand plugin
+from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
 from  gluon.serializers import json
 
 """
@@ -14,6 +14,11 @@ def html_id(field, table_name='no_table'):
     result = result.replace('<no table>', 'no_table').replace('.', '_') 
     return result
 
+def keepvalues_workaround( fields ):
+    # instead of keepvalues=True
+    for f in fields:
+        #if f.name in request.vars:
+            f.default = request.vars[f.name]
 
 def fullname_4htlm_form(field):
     return str(field).replace(".", "__")
@@ -163,12 +168,17 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             return reduce(lambda a, b: (a & b), queries) 
         else:
             return True
+
+
+                
+    keepvalues_workaround( sfields )
     
     if request.vars.trigger:
         def ajax_response():
             trigger = get_field_by_html_id( triggers, request.vars.trigger , table_name="jurgio")
             session.trigger= html_id(trigger)
             updatables = triggers[trigger]
+            keepvalues_workaround ( updatables )
             
             # SUBSETS by QUERY
             query = make_query([trigger]) #  based ONLY on current trigger
@@ -176,15 +186,32 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             for sf in updatables:
                 f = get_field_from_fullname4htlm(sf.name) 
                 # sql = db(query)._select( f, left=left, distinct=True )
-                sf.requires = IS_IN_DB( db(query), f , label=db[f._tablename]._format,  left=left, distinct=True )
+                print "DBG db[f._tablename]._id:", db[f._tablename]._id
+                if db[f._tablename]._id is f: # if field is private ID
+                    print "DBG   %s   is PK of   %s" % ( f, db[f._tablename] )
+                    label = db[f._tablename]._format
+                # elif get_referenced_table(f): # if field is foreign ID #TODO https://groups.google.com/forum/#!topic/web2py/4QmDyCh1i2A
+                    # print "DBG   %s   is FK of   %s" % ( f, get_referenced_table(f))
+                    # label = db[get_referenced_table(f)]._format
+                else:
+                    label = None
+                
+                if query == True: # nothing selected -- default fake query
+                    db_set = db()  # select everything
+                else:
+                    db_set = db(query)
+                    
+                sf.requires = IS_IN_DB( db_set, f , label=label,  left=left, distinct=True )
             
-            form = SQLFORM.factory( *updatables, table_name="jurgio")
+                rows =  db(query).select( f , left=left, distinct=True )
+                print "DBG rows:", rows
+                
+                
+            form = SQLFORM.factory( *updatables, table_name="jurgio") # construct form with ONLY fields to be updated 
             
-            if request.vars[ trigger.name ]:
-                    # form =  SQLFORM.factory( *updatables ) # construct form with ONLY fields to be updated 
-                    js = ajax_response_js_NG(updatables, form,  table_name="jurgio")
-                    session.ajax_response_js = js
-                    return js
+            js = ajax_response_js_NG(updatables, form,  table_name="jurgio")
+            session.ajax_response_js = js
+            return js
         return ajax_response()
         
     else:

@@ -28,6 +28,15 @@ from collections import defaultdict
 from gluon.storage import Storage
 from pydal.objects import Field, Expression, Table
 
+def get_referenced_table(field):
+        f_type = field.type
+        if isinstance(f_type,str) and (
+            f_type.startswith('reference') or
+            f_type.startswith('list:reference')):
+            referenced_table = f_type.split()[1].split('.')[0]
+            return referenced_table
+            
+        
 def find_references_and_fkeys( table ):
     db = gluon_current.db
     """
@@ -37,11 +46,8 @@ def find_references_and_fkeys( table ):
     """
     result = defaultdict(list) 
     for field in db[table]:
-        f_type = field.type
-        if isinstance(f_type,str) and (
-            f_type.startswith('reference') or
-            f_type.startswith('list:reference')):
-            referenced_table = f_type.split()[1].split('.')[0]
+        referenced_table = get_referenced_table(field)
+        if referenced_table:
             result[ referenced_table ].append( field.name )            
     return result
 
