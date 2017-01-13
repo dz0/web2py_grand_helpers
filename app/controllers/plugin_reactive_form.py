@@ -148,17 +148,13 @@ def test_auth_model_oldschool_compare_equals(): # TODO
         db.auth_user.first_name: [db.auth_membership.group_id, db.auth_permission.table_name ],
     }
     
-    
-    # define search form fields
-    sfields = map(make_search_field, fields)
-    
     # convert triggers to search fields
     triggers = { make_search_field(trigger) : map(make_search_field, updatables)  
                  for trigger, updatables in triggers.items() }
     
     left = build_joins_chain( 'auth_user', db.auth_membership, 'auth_group', db.auth_permission.group_id  )
 
-    def make_query(sfields):
+    def construct_query(sfields):
         queries = []
         for sf in sfields:
             if request.vars[ sf.name]:
@@ -168,10 +164,7 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             return reduce(lambda a, b: (a & b), queries) 
         else:
             return True
-
-
                 
-    keepvalues_workaround( sfields )
     
     if request.vars.trigger:
         def ajax_response():
@@ -180,33 +173,38 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             updatables = triggers[trigger]
             keepvalues_workaround ( updatables )
             
-            # SUBSETS by QUERY
-            query = make_query([trigger]) #  based ONLY on current trigger
-            print "\nDBG QUERY", query
-            for sf in updatables:
-                f = get_field_from_fullname4htlm(sf.name) 
-                # sql = db(query)._select( f, left=left, distinct=True )
-                print "DBG db[f._tablename]._id:", db[f._tablename]._id
-                if db[f._tablename]._id is f: # if field is private ID
-                    print "DBG   %s   is PK of   %s" % ( f, db[f._tablename] )
-                    label = db[f._tablename]._format
-                # elif get_referenced_table(f): # if field is foreign ID #TODO https://groups.google.com/forum/#!topic/web2py/4QmDyCh1i2A
-                    # print "DBG   %s   is FK of   %s" % ( f, get_referenced_table(f))
-                    # label = db[get_referenced_table(f)]._format
-                else:
-                    label = None
-                
-                if query == True: # nothing selected -- default fake query
-                    db_set = db()  # select everything
-                else:
-                    db_set = db(query)
-                    
-                sf.requires = IS_IN_DB( db_set, f , label=label,  left=left, distinct=True )
+            query = construct_query([trigger]) #  based ONLY on current trigger
             
-                rows =  db(query).select( f , left=left, distinct=True )
-                print "DBG rows:", rows
-                
-                
+            def select_subsets(query, updatables):
+                # SUBSETS by QUERY
+                print "\nDBG QUERY", query
+                for sf in updatables:
+                    f = get_field_from_fullname4htlm(sf.name) 
+                    # sql = db(query)._select( f, left=left, distinct=True )
+                    # rows =  db(query).select( f , left=left, distinct=True )
+                    # print "DBG rows:", rows
+                    
+                    # print "DBG db[f._tablename]._id:", db[f._tablename]._id
+                    if db[f._tablename]._id is f: # if field is private ID
+                        # print "DBG   %s   is PK of   %s" % ( f, db[f._tablename] )
+                        label = db[f._tablename]._format
+                    elif get_referenced_table(f): # if field is foreign ID #TODO https://groups.google.com/forum/#!topic/web2py/4QmDyCh1i2A
+                        # print "DBG   %s   is FK of   %s" % ( f, get_referenced_table(f))
+                        label = db[get_referenced_table(f)]._format
+                        f = db[get_referenced_table(f)]._id  # override f with PK of foreign table
+                    else:
+                        label = None
+                    
+                    if query == True: # nothing selected -- default fake query
+                        db_set = db()  # select everything
+                        left_local = None
+                    else:
+                        db_set = db(query)
+                        left_local = left
+                        
+                    sf.requires = IS_IN_DB( db_set, f , label=label,  left=left_local, distinct=True )
+            
+            select_subsets( query, updatables )
             form = SQLFORM.factory( *updatables, table_name="jurgio") # construct form with ONLY fields to be updated 
             
             js = ajax_response_js_NG(updatables, form,  table_name="jurgio")
@@ -215,7 +213,10 @@ def test_auth_model_oldschool_compare_equals(): # TODO
         return ajax_response()
         
     else:
-        query = make_query(sfields)
+        # define search form fields
+        sfields = map(make_search_field, fields)        
+        query = construct_query(sfields)
+        keepvalues_workaround( sfields )
         form = SQLFORM.factory( *sfields, table_name="jurgio")
         # form.process(keepvalues= True)
         js4triggers=SCRIPT(ajax_triggers_js(triggers, field_names=[sf.name for sf in sfields], table_name="jurgio"))
