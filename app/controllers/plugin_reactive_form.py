@@ -14,6 +14,22 @@ def html_id(field, table_name='no_table'):
     result = result.replace('<no table>', 'no_table').replace('.', '_') 
     return result
 
+
+def fullname_4htlm_form(field):
+    return str(field).replace(".", "__")
+    
+def make_search_field(f):
+    """to have tablename info in form input field name"""
+    return f.clone(name=fullname_4htlm_form(f))  
+
+def get_str_expr_from_fullname4htlm( fullname ):
+    return fullname.replace("__", ".")
+
+def get_field_from_fullname4htlm( fullname ):
+    tname, fname = fullname.split("__")
+    return db[tname][fname]
+    
+
 def get_field_by_html_id(fields, htmlid, table_name='no_table'):
     return [t for t in fields if html_id(t, table_name) == htmlid][0]
 
@@ -27,16 +43,17 @@ def ajax_triggers_js(triggers, field_names=[], table_name='no_table', **update_u
     # will inject onchange triggers (for ajax calls)
     js = ""
     for trigger in triggers:
-        
-        update_url =  URL(vars={'trigger':html_id(trigger, table_name) }, extension=None, **update_url_kwargs)
+        trigger =  trigger
+        trigger_htmlid = html_id(trigger, table_name) 
+        update_url = URL(vars={'trigger':html_id(trigger, table_name) }, extension=None, **update_url_kwargs)
         
         if trigger.widget == SQLFORM.widgets.radio.widget:
             # elements_set = "\n   jQuery('form #%s.web2py_radiowidget input[name=\"%s\"]:radio')" % ( html_id(trigger), trigger.name ) 
-            elements_set = "\n   jQuery('form #%s.web2py_radiowidget input:radio')" % html_id(trigger, table_name) 
+            elements_set = "\n   jQuery('form #%s.web2py_radiowidget input:radio')" % trigger_htmlid
         else:
-            elements_set = "\n   jQuery('form #%s.generic-widget')" % html_id(trigger, table_name) 
+            elements_set = "\n   jQuery('form #%s.generic-widget')" % trigger_htmlid
        
-        js += "alert('trigger is: %s');" % trigger.name
+        js += "alert('trigger will be: #%s');" % trigger_htmlid
         js += (
               elements_set
               # since jquery 1.7 on/off is recomended instead of bind/unbind (as they are deprecated since jquery 3)
@@ -51,19 +68,28 @@ def ajax_triggers_js(triggers, field_names=[], table_name='no_table', **update_u
 
     return js
 
-def ajax_response_js(triggers, form, table_name='no_table'):  # TODO table_name can be derived form.table_name
+def ajax_response_js_NG(updatables, form, table_name='no_table'):  # TODO table_name can be derived form.table_name
+        table_name = table_name or form.table._tablename
+        js = ""
+        for field in updatables:  # what we need to update
+            # target_id = html_id( make_search_field(field), table_name)
+            target_id = html_id( field, table_name)
+            widget = form.custom.widget[field.name]
+            js += "\n   alert('updating  #%s '); " % (target_id)
+            js += "\n   jQuery('form #%s.generic-widget').html(%s); " % (target_id, json(widget) )
+        js += "\n plugin_reactive_form_inject_ajax_update_triggers(); \n"
+        return js
+ 
+
+def ajax_response_js(triggers, form, table_name=None):  # TODO table_name can be derived form.table_name
+    """TODO: "triggers" are needed just to get "updatables"
+    """
     if request.vars.trigger:  # used for ajax response
         trigger = get_field_by_html_id( triggers, request.vars.trigger , table_name)
         updatables = triggers[trigger]
         
-        js = ""
-        for field in updatables:  # what we need to update
-            target_id = html_id(field, table_name)
-            widget = form.custom.widget[field.name]
-            js += "\n   jQuery('form #%s.generic-widget').html(%s); " % (target_id, json(widget) )
-        js += "\n plugin_reactive_form_inject_ajax_update_triggers(); \n"
-        return js
-            
+        return ajax_response_js_NG(updatables, form, table_name)
+           
         # for dbg purposes
         # result = [ form.custom.widget[field.name] for field in updatables ]
         # return UL(result)
@@ -96,7 +122,7 @@ def tester(query, form, selected_fields, **kwargs):
                 query=XML(str(query).replace('AND', "<br>AND"))
                 )
        
-def test_auth_model_oldschool(): # TODO
+def test_auth_model_oldschool_compare_equals(): # TODO
 
     # db.auth_user.id.requires = IS_IN_DB(db, db.auth_user.id, '%(first_name)s')
     db.auth_user.first_name.requires = IS_IN_DB(db, db.auth_user.first_name)
@@ -112,48 +138,69 @@ def test_auth_model_oldschool(): # TODO
          # db.auth_group.role, 
          db.auth_permission.table_name #,   db.auth_permission.name
     ]
-
+    
     triggers = {
         db.auth_user.first_name: [db.auth_membership.group_id, db.auth_permission.name ],
     }
+    
+    
+    # define search form fields
+    
+    sfields = map(make_search_field, fields)
+    
+    # convert triggers to search fields
+    triggers = { make_search_field(trigger) : map(make_search_field, updatables)  
+                 for trigger, updatables in triggers.items() }
+    
 
     left = build_joins_chain( 'auth_user', db.auth_membership, 'auth_group', db.auth_permission.group_id  )
 
+    
     def make_query():
         queries = []
-        for f in fields:
-            if request.vars[f.name]:
-                queries.append(  f == request.vars[f.name] )
+        for sf in sfields:
+            if request.vars[ sf.name]:
+                queries.append(  get_field_from_fullname4htlm(sf.name)  == request.vars[sf.name] )
+                # queries[sf.name] =   get_field_from_fullname4htlm(sf.name)  == request.vars[sf.name] 
         if queries:
             return reduce(lambda a, b: (a & b), queries) 
         else:
             return True
             
-    form = SQLFORM.factory( *fields, table_name="jurgio")
+    query = make_query()
+
     
     if request.vars.trigger:
         def ajax_response():
             trigger = get_field_by_html_id( triggers, request.vars.trigger , table_name="jurgio")
+            # trigger = get_field_from_fullname4htlm( request.vars.trigger_name )
             session.trigger= html_id(trigger)
             updatables = triggers[trigger]
+            
+            # SUBSETS by QUERY
+            for sf in updatables:
+                f = get_field_from_fullname4htlm(sf.name) 
+                rows = db(query).select( f, left=left, distinct=True )
+                sf.requires = IS_IN_SET( {r[f]:r[f] for r in rows} )
                 
+            form = SQLFORM.factory( *sfields, table_name="jurgio")
+            
             if request.vars[ trigger.name ]:
-                    
                     # form =  SQLFORM.factory( *updatables ) # construct form with ONLY fields to be updated 
-                    js = ajax_response_js(triggers, form, table_name="jurgio")
+                    js = ajax_response_js_NG(updatables, form,  table_name="jurgio")
                     session.ajax_response_js = js
                     return js
         return ajax_response()
         
-    query = make_query()
     
-    
-    # form.process(keepvalues= True)
-    js4triggers=SCRIPT(ajax_triggers_js(triggers, field_names=[f.name for f in fields], table_name="jurgio"))
-    # print "DBG js4triggers
-    form = CAT(form, js4triggers)
-    
-    return tester(query, form, fields, left=left)
+    else:
+        form = SQLFORM.factory( *sfields, table_name="jurgio")
+        # form.process(keepvalues= True)
+        js4triggers=SCRIPT(ajax_triggers_js(triggers, field_names=[sf.name for sf in sfields], table_name="jurgio"))
+        # print "DBG js4triggers
+        form = CAT(form, js4triggers)
+        
+        return tester(query, form, fields, left=left)
     
 
                 
