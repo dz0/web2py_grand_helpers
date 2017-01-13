@@ -153,7 +153,7 @@ def test_auth_model_oldschool_compare_equals(): # TODO
     
     left = build_joins_chain( 'auth_user', db.auth_membership, 'auth_group', db.auth_permission.group_id  )
 
-    def make_query():
+    def make_query(sfields):
         queries = []
         for sf in sfields:
             if request.vars[ sf.name]:
@@ -163,10 +163,6 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             return reduce(lambda a, b: (a & b), queries) 
         else:
             return True
-            
-    query = make_query()
-    print "\nDBG QUERY", query
-
     
     if request.vars.trigger:
         def ajax_response():
@@ -175,11 +171,12 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             updatables = triggers[trigger]
             
             # SUBSETS by QUERY
+            query = make_query([trigger]) #  based ONLY on current trigger
+            print "\nDBG QUERY", query
             for sf in updatables:
                 f = get_field_from_fullname4htlm(sf.name) 
                 # sql = db(query)._select( f, left=left, distinct=True )
                 sf.requires = IS_IN_DB( db(query), f , label=db[f._tablename]._format,  left=left, distinct=True )
-
             
             form = SQLFORM.factory( *updatables, table_name="jurgio")
             
@@ -190,8 +187,8 @@ def test_auth_model_oldschool_compare_equals(): # TODO
                     return js
         return ajax_response()
         
-    
     else:
+        query = make_query(sfields)
         form = SQLFORM.factory( *sfields, table_name="jurgio")
         # form.process(keepvalues= True)
         js4triggers=SCRIPT(ajax_triggers_js(triggers, field_names=[sf.name for sf in sfields], table_name="jurgio"))
