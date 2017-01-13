@@ -53,7 +53,7 @@ def ajax_triggers_js(triggers, field_names=[], table_name='no_table', **update_u
         else:
             elements_set = "\n   jQuery('form #%s.generic-widget')" % trigger_htmlid
        
-        js += "alert('trigger will be: #%s');" % trigger_htmlid
+        # js += "alert('trigger will be: #%s');" % trigger_htmlid
         js += (
               elements_set
               # since jquery 1.7 on/off is recomended instead of bind/unbind (as they are deprecated since jquery 3)
@@ -75,8 +75,8 @@ def ajax_response_js_NG(updatables, form, table_name='no_table'):  # TODO table_
             # target_id = html_id( make_search_field(field), table_name)
             target_id = html_id( field, table_name)
             widget = form.custom.widget[field.name]
-            js += "\n   alert('updating  #%s '); " % (target_id)
-            js += "\n   jQuery('form #%s.generic-widget').html(%s); " % (target_id, json(widget) )
+            # js += "\n   alert('updating  #%s '); " % (target_id)
+            js += "\n   jQuery('form #%s.generic-widget').replaceWith(%s); " % (target_id, json(widget) )
         js += "\n plugin_reactive_form_inject_ajax_update_triggers(); \n"
         return js
  
@@ -113,7 +113,7 @@ def tester(query, form, selected_fields, **kwargs):
     # data.colnames = [". %s ." % f.replace('.', '\n') for f in data.colnames ] 
     
     # menu4tests()
-    return dict( data = data, 
+    return dict( z_data = data, 
                 # sql = XML(str(db._lastsql[0]).replace('HAVING', "<br>HAVING").replace('WHERE', "<br>WHERE").replace('AND', "<br>AND").replace('LEFT JOIN', '<BR/>LEFT JOIN ')), 
                 sql = XML(str(sql).replace('HAVING', "<br>HAVING").replace('WHERE', "<br>WHERE").replace('AND', "<br>AND").replace('LEFT JOIN', '<BR/>LEFT JOIN ')), 
                 form=form,  
@@ -127,35 +127,32 @@ def test_auth_model_oldschool_compare_equals(): # TODO
     # db.auth_user.id.requires = IS_IN_DB(db, db.auth_user.id, '%(first_name)s')
     db.auth_user.first_name.requires = IS_IN_DB(db, db.auth_user.first_name)
     db.auth_membership.group_id.widget =  SQLFORM.widgets.radio.widget
+    db.auth_membership._format =  "bla %(group_id)s"
     db.auth_permission.table_name.requires =  IS_IN_DB(db,  db.auth_permission.table_name)
     # db.auth_permission.table_name.widget =  SQLFORM.widgets.radio.widget
 
     fields = [        
          # db.auth_user.id,
          db.auth_user.first_name,
-
          db.auth_membership.group_id,
          # db.auth_group.role, 
          db.auth_permission.table_name #,   db.auth_permission.name
     ]
     
     triggers = {
-        db.auth_user.first_name: [db.auth_membership.group_id, db.auth_permission.name ],
+        db.auth_user.first_name: [db.auth_membership.group_id, db.auth_permission.table_name ],
     }
     
     
     # define search form fields
-    
     sfields = map(make_search_field, fields)
     
     # convert triggers to search fields
     triggers = { make_search_field(trigger) : map(make_search_field, updatables)  
                  for trigger, updatables in triggers.items() }
     
-
     left = build_joins_chain( 'auth_user', db.auth_membership, 'auth_group', db.auth_permission.group_id  )
 
-    
     def make_query():
         queries = []
         for sf in sfields:
@@ -168,22 +165,23 @@ def test_auth_model_oldschool_compare_equals(): # TODO
             return True
             
     query = make_query()
+    print "\nDBG QUERY", query
 
     
     if request.vars.trigger:
         def ajax_response():
             trigger = get_field_by_html_id( triggers, request.vars.trigger , table_name="jurgio")
-            # trigger = get_field_from_fullname4htlm( request.vars.trigger_name )
             session.trigger= html_id(trigger)
             updatables = triggers[trigger]
             
             # SUBSETS by QUERY
             for sf in updatables:
                 f = get_field_from_fullname4htlm(sf.name) 
-                rows = db(query).select( f, left=left, distinct=True )
-                sf.requires = IS_IN_SET( {r[f]:r[f] for r in rows} )
-                
-            form = SQLFORM.factory( *sfields, table_name="jurgio")
+                # sql = db(query)._select( f, left=left, distinct=True )
+                sf.requires = IS_IN_DB( db(query), f , label=db[f._tablename]._format,  left=left, distinct=True )
+
+            
+            form = SQLFORM.factory( *updatables, table_name="jurgio")
             
             if request.vars[ trigger.name ]:
                     # form =  SQLFORM.factory( *updatables ) # construct form with ONLY fields to be updated 
