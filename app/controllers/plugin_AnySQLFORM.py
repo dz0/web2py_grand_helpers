@@ -13,32 +13,43 @@ DEFAULT_TABLE_NAME = 'AnySQLFORM'
 def test():
     
     user_full_name = db.auth_user.first_name + db.auth_user.last_name
-    # print 'DBG expr', user_full_name
+    
+    # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
+    
     fields = [
         db.auth_user.first_name, 
         db.auth_user.last_name, 
         
-        db.auth_permission.table_name,
+        db.auth_user.id,
         
+        db.auth_permission.table_name,
+        db.auth_permission.id,
+        
+        Field( 'somefield' ),
+        Field('user_id', 'reference auth_user', requires=IS_IN_DB(db,db.auth_user.id, '%(first_name)s %(last_name)s')),
         FormField(user_full_name, name='full_name'),
     ]
+    
+    print "DBG fields:", fields
 
     form = AnySQLFORM( *fields )
+    # form = SQLFORM.factory( *fields )
 
-    data = form.vars_as_Row_str_types()
+    form.process()
+    data = form.vars_as_Row()
         
     return dict(
             form=form, 
-            data = repr(data),
+            # data = repr(data),
+            data = data,
+            vars=form.vars,
             )
     
 
-# this should make kind of layer over Field
-class FormField( Field ):
-    def __init__(self, field, **kwargs):
-        """ field is of type Field or Expression
-        """
-        default_attrs = dict( 
+
+
+################## module ##################
+default_field_attrs = dict( 
                 type='string',
                 length=None,
                 default=DEFAULT,
@@ -71,9 +82,17 @@ class FormField( Field ):
                 map_none=None,
                 # rname=None
                  )
+# this should make kind of layer over Field
+class FormField( Field ):
+                 
+    def __init__(self, field, **kwargs):
+        """ field is of type Field or Expression
+        """
+ 
+        # populate based on   default_field_attrs  and  kwargs
         field_attrs = {}
-        for attr in default_attrs:
-            parent_attr = default_attrs[attr]
+        for attr in default_field_attrs:
+            parent_attr = default_field_attrs[attr]
             if hasattr(field, attr):  # Field should have, but Expression would miss some
                 parent_attr = getattr(field, attr)
             field_attrs[attr] = kwargs.get( attr, parent_attr ) # kwargs or field args
@@ -91,10 +110,17 @@ class FormField( Field ):
         self.target_expression = field  # we leave direct connection to the field -- for data to be compared/inserted
         
         # update .name for Field to include tablename
+        
         if type(field) == Field:  
-            self.name = field.tablename+"__"+field.name # let's hope .tablename is present
+            if not hasattr(field, 'tablename'):
+                field.tablename = 'no_table'
+            self.name = field.tablename+"__"+field.name 
         
         self.__dict__.update( kwargs )
+        
+        if field.type == 'id':  # override, as otherwise field is not shown in form
+            self.type = 'integer'
+            self.requires = IS_IN_DB( db, field.table, label=field.table._format ) 
          
         # for search forms we would need comparis
         self.comparison = kwargs.get('comparison')
@@ -138,7 +164,7 @@ class AnySQLFORM( ):
                     return ff
         raise KeyError("FormField '%s' not found" % arg)
         
-    def vars_as_Row_str_types( self, vars=None ): # but types are not checked/converted
+    def vars_as_Row( self, vars=None ): # but types are not checked/converted
         row = defaultdict( dict )
         
         if vars is None:
