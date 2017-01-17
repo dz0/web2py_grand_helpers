@@ -17,6 +17,7 @@ orphan_with_target = Field('orphan_name')
 orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 def test_fields():
   return [
+
         db.auth_user.first_name, 
         db.auth_user.last_name, 
         
@@ -28,11 +29,12 @@ def test_fields():
         # no_table items   
         Field('user_id', 'reference auth_user'), 
         
-        # Field( 'somefield' )),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        FormField( Field( 'somefield' ), target_expression='ha' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        # Field( 'somefield' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        FormField( Field( 'somefield' ), target_expression='string_value' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
         orphan_with_target,
         # expression (as target)
         FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
+        FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
     ]
     
 def test_searchform():
@@ -84,6 +86,16 @@ def test_anyform():
 
 
 ################## module ##################
+
+def find_out_attr(attr, data_sources):
+    for data in data_sources:
+        # dict obj
+        if isinstance(data, dict)  and  attr in data:   return data[attr]
+        # or object property
+        elif hasattr( data, attr ): return getattr(data, attr) 
+    raise KeyError( "%s not found in data_sources %s" % (data, data_sources))
+    
+
 default_field_attrs = dict( 
                 type='string',
                 length=None,
@@ -158,17 +170,18 @@ class FormField( Field ):
         default_field_attrs['rname'] = getattr(field, '_rname', None)
 
         # populate attrs for field constructor
-        def find_out_attr(attr):
-            # 1st) look in kwargs
-            if attr in kwargs: return kwargs.pop(attr)
-            # 2nd) maybe attr was already set to self  in previous code  
-            elif hasattr( self, attr ):  return getattr(self, attr)  # delete it from kwargs as well
-            # 3rd) look in field attrs
-            elif hasattr( field, attr ): return getattr(field, attr)
-            # else
-            else: return default_field_attrs[attr]
+        # def find_out_attr(attr):
+            # #1st) look in kwargs
+            # if attr in kwargs: return kwargs.pop(attr)
+            # #2nd) maybe attr was already set to self  in previous code  
+            # elif hasattr( self, attr ):  return getattr(self, attr)  # delete it from kwargs as well
+            # #3rd) look in field attrs
+            # elif hasattr( field, attr ): return getattr(field, attr)
+            # #else
+            # else: return default_field_attrs[attr]
 
-        field_attrs = { key: find_out_attr(key)   for key in default_field_attrs }
+        data_srcs = [kwargs, self, field, default_field_attrs]
+        field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
             
     
             
@@ -177,8 +190,7 @@ class FormField( Field ):
 
         Field.__init__(self, fieldname=new_name, **field_attrs)
 
-               
-        if isinstance(field, Field):
+        if type(field) is Field:
             self.label = self.tablename + ': ' +self.label
         
         self.__dict__.update( kwargs )
@@ -300,11 +312,17 @@ class AnySQLFORM( ):
         # else:
             # raise KeyError("FormField '%s' not found" % arg)
         
-    def get_value(self, field):
-        # if not self.vars:  # some singleton
-            # self.process(keepvalues=True) # or self.__form.process()
-        # return self.vars[field.name]
-        return current.request.vars.get( field.name, None )
+    def get_value(self, field, vars=None):
+        
+        if not vars:
+            # default to self.vars
+            if not self.vars: self.process(keepvalues=True) # or self.__form.process()
+            vars = self.vars
+
+        # return current.request.vars.get( field.name, None ) 
+        
+        return vars[field.name] # could be request vars
+        
 
     def vars_as_Row( self, vars=None ): # but types are not checked/converted
         row = defaultdict( dict )
@@ -322,6 +340,8 @@ class AnySQLFORM( ):
                     row[expr.tablename][expr.name] = value
                 elif isinstance(expr, Expression): # not Field
                     row['_extra'][str(expr)] = value
+                else :
+                    row['_direct_values'][str(expr)] = value
         
         return Row( **row ) 
         
@@ -399,13 +419,17 @@ class SearchField( FormField ):
                          '>=': 'greater_or_equal',
                         }
 
-        self.name_extension = kwargs.pop('name_extension', None)
-        if self.name_extension is None:
+#         if not hasattr(self, 'name_extension'):
+#             self.name_extension = kwargs.pop('name_extension', None)
+           
+        try:
+            self.name_extension = find_out_attr('name_extension', [self, kwargs, field])
+        except KeyError, AttributeError:    
+            # if self.name_extension is None:
             self.name_extension = extensions.get(self.comparison, self.comparison)  
        
                
     def construct_new_name( self, field, kwargs ):
-
         new_name = FormField.construct_new_name( self, field, kwargs )
         self.init_comparison_and_name_extension( field, kwargs )
 
