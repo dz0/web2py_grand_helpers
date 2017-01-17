@@ -292,7 +292,7 @@ class AnySQLFORM( ):
                 if f.name == arg:
                     rez.append(  f )
 
-            if isinstance(arg, Expression):
+            if isinstance(arg, Expression):  # TODO: what if target_expression is direct value (int, str)?
                 def match_kwargs(): # helper 
                     for key, val in kwargs.items():
                         if (not hasattr(f, key)
@@ -441,6 +441,7 @@ class SearchField( FormField ):
     def get_query(self, val):
         if self.query_function:
             return self.query_function( val )
+            # return self.query_function( self, val ) # or so? because query_function  is monkeypatched
         
         else:
             def query4filter_direct_val(expr, op, value):
