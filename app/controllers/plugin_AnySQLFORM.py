@@ -12,7 +12,9 @@ from pydal._globals import DEFAULT
 
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
-db.auth_user._format= "%(first_name)s %(last_name)s"
+# test fields
+orphan_with_target = Field('orphan_name')
+orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 def test_fields():
   return [
         db.auth_user.first_name, 
@@ -20,15 +22,16 @@ def test_fields():
         
         db.auth_user.id,
         
-        db.auth_permission.table_name,
-        db.auth_permission.id,
+        FormField(db.auth_permission.table_name),
+        SearchField(db.auth_permission.id),
+        
+        # no_table items   
+        Field('user_id', 'reference auth_user'), 
         
         # Field( 'somefield' )),  # for AnySQLFORM   Field( 'somefield' ) would be enough
         FormField( Field( 'somefield' ), target_expression='ha' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        # FormField(
-            Field('user_id', 'reference auth_user'), 
-            # requires=IS_IN_DB(db,db.auth_user.id, '%(first_name)s %(last_name)s')),
-            # target_expression="auth_user.id"),
+        orphan_with_target,
+        # expression (as target)
         FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
     ]
     
@@ -40,7 +43,7 @@ def test_searchform():
     form = SearchSQLFORM( *fields )
     # form = SQLFORM.factory( *fields )
 
-    form.process()
+    form.process(keepvalues=True)
     data = form.vars_as_Row()
     query = form.build_query()
         
@@ -66,7 +69,7 @@ def test_anyform():
     form = AnySQLFORM( *fields )
     # form = SQLFORM.factory( *fields )
 
-    form.process()
+    form.process(keepvalues=True)
     data = form.vars_as_Row()
         
     return dict(
@@ -126,8 +129,8 @@ class FormField( Field ):
         """
  
         # try to infer TARGET_EXPRESSION and TABLENAME
-        if 'user_id' in str(field):
-            print 0
+#         if 'user_id' in str(field):
+#             print 0
         # New PROPERTY (to remember original field/expression)
         if hasattr(field, 'target_expression'):  # if  isinstance(field, FormField)
             self.target_expression = field.target_expression
@@ -416,6 +419,27 @@ class SearchField( FormField ):
             return self.query_function( val )
         
         else:
+            def query4filter_direct_val(expr, op, value):
+                "woraruond to see not result (True/False: 1/0) but expression in sql query"
+                # http://dev.mysql.com/doc/refman/5.7/en/comparison-operators.html
+                # https://www.tutorialspoint.com/postgresql/postgresql_operators.htm
+                # https://www.tutorialspoint.com/sqlite/sqlite_comparison_operators.htm
+                if op == '==': op = '='
+                for o in "= < > <= >= !=":
+                    if op == o:
+                        return  "%s %s %s" %( repr(expr), op, repr(value) ) 
+                if isinstance(value, (str)): 
+                    # http://dev.mysql.com/doc/refman/5.7/en/string-comparison-functions.html
+                    # https://www.postgresql.org/docs/8.3/static/functions-matching.html
+                    # https://www.sqlite.org/lang_expr.html :)
+                    if op == 'contains': fmt="%%%s%%"
+                    elif op == 'like': fmt="%s"
+                    elif op == 'startswith': fmt="%%%s"
+                    elif op == 'endswith': fmt="%s%%"
+                    return ("LOWER('%s') LIKE '"+ fmt ) % (expr, lower(val))    #TODO FIXME sqlite +"' ESCAPE '\'"     
+                raise RuntimeError("Invalid operation: %s %s %s" %(repr(expr), op, repr(value)) )
+            
+                
             def query4filter(expr, op, value):
                 # taken from pydal/helpers/methods.py  def smart_query
                 # in general should map:
@@ -445,7 +469,10 @@ class SearchField( FormField ):
                 
                 return new_query       
 
-            return query4filter(self.target_expression, self.comparison, val)
+            if isinstance(self.target_expression, (str, int,  float, long,  )):
+                return query4filter_direct_val(self.target_expression, self.comparison, val)
+            else: 
+                return query4filter(self.target_expression, self.comparison, val)
 
         
         
