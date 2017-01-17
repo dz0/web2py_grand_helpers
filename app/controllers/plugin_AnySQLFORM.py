@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+# skBMLYp0
 from gluon.storage import Storage
 from gluon import current
 # from gluon import *
@@ -12,6 +12,7 @@ from pydal._globals import DEFAULT
 
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
+db.auth_user._format= "%(first_name)s %(last_name)s"
 def test_fields():
   return [
         db.auth_user.first_name, 
@@ -24,7 +25,10 @@ def test_fields():
         
         # Field( 'somefield' )),  # for AnySQLFORM   Field( 'somefield' ) would be enough
         FormField( Field( 'somefield' ), target_expression='ha' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        Field('user_id', 'reference auth_user', requires=IS_IN_DB(db,db.auth_user.id, '%(first_name)s %(last_name)s')),
+        # FormField(
+            Field('user_id', 'reference auth_user'), 
+            # requires=IS_IN_DB(db,db.auth_user.id, '%(first_name)s %(last_name)s')),
+            # target_expression="auth_user.id"),
         FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
     ]
     
@@ -121,11 +125,24 @@ class FormField( Field ):
         """ field is of type Field or Expression
         """
  
+        # try to infer TARGET_EXPRESSION and TABLENAME
+        if 'user_id' in str(field):
+            print 0
         # New PROPERTY (to remember original field/expression)
         if hasattr(field, 'target_expression'):  # if  isinstance(field, FormField)
             self.target_expression = field.target_expression
         else:
             self.target_expression = field  # we leave direct connection to the field -- for data to be compared/inserted
+
+            if getattr(field, 'tablename', 'no_table') == 'no_table': # if orphan field
+                # TODO:  aliases?
+                
+                # we infer target_expression from  FK
+                if field.type.startswith('reference ') or field.type.startswith('list:reference '): 
+                    foreign_table = field.type.split()[1]
+                    self.target_expression = db[foreign_table]._id
+                    self.requires = IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) 
+
 
         # assign table_name if not present
         if isinstance(field, Field):   # if not bare Expression, assign some tablename
@@ -133,15 +150,24 @@ class FormField( Field ):
                 field.tablename = field._tablename  = 'no_table'
             self.tablename = self._tablename = field.tablename    
 
-        # populate based on   default_field_attrs  and  kwargs
-        field_attrs = {}
-        for attr in default_field_attrs:
-            parent_attr = default_field_attrs[attr]
-            if hasattr(field, attr):  # Field should have, but Expression would miss some
-                parent_attr = getattr(field, attr)
-            field_attrs[attr] = kwargs.pop( attr, parent_attr ) # kwargs or field args
-        if hasattr(field, '_rname'):
-            field_attrs['rname'] = field._rname
+
+        # in rare cases    
+        default_field_attrs['rname'] = getattr(field, '_rname', None)
+
+        # populate attrs for field constructor
+        def find_out_attr(attr):
+            # 1st) look in kwargs
+            if attr in kwargs: return kwargs.pop(attr)
+            # 2nd) maybe attr was already set to self  in previous code  
+            elif hasattr( self, attr ):  return getattr(self, attr)  # delete it from kwargs as well
+            # 3rd) look in field attrs
+            elif hasattr( field, attr ): return getattr(field, attr)
+            # else
+            else: return default_field_attrs[attr]
+
+        field_attrs = { key: find_out_attr(key)   for key in default_field_attrs }
+            
+    
             
         # call Super init
         new_name = self.construct_new_name( field, kwargs ) 
@@ -156,7 +182,8 @@ class FormField( Field ):
         
         if field.type == 'id':  # override, as otherwise field is not shown in form
             self.type = 'integer'
-            self.requires = IS_IN_DB( db, field.table, label=field.table._format ) 
+            self.requires = IS_IN_DB( db, field.table, field.table._format ) 
+         
          
     
     def construct_new_name(self, field, kwargs ):
@@ -333,7 +360,7 @@ class SearchField( FormField ):
         from gluon.validators import Validator , IS_EMPTY_OR
         if isinstance( self.requires , Validator):
             #print( name, field.requires )
-            self.requires = IS_EMPTY_OR( field.requires )
+            self.requires = IS_EMPTY_OR( self.requires )
             
         # assign needed properties    
         #self.target_is_aggregate = kwargs.get('target_is_aggregate', None)  # might be used in SearchFORM build_query
@@ -457,7 +484,7 @@ class SearchSQLFORM (AnySQLFORM ):
                 if ignore_orphaned_fields:
                     continue
                 else:
-                    raise TypeError("not possible to construct query with orphaned field: %s (form field name: %s)" % (expr, f.name)) 
+                    raise TypeError("not possible to construct query with orphaned field: %s (form field name: %s) -- should be provided with target_expression" % (expr, f.name)) 
             #if "some" in f.name:
             #    print "dbg, target", f.target_expression
             if input_value:
