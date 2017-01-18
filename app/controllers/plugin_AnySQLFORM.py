@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# skBMLYp0
+# 
 from gluon.storage import Storage
 from gluon import current
 # from gluon import *
@@ -24,7 +24,7 @@ def test_fields():
         db.auth_user.id,
         
         FormField(db.auth_permission.table_name),
-        SearchField(db.auth_permission.id),
+        QueryField(db.auth_permission.id),
         
         # no_table items   
         Field('user_id', type='reference auth_user'), 
@@ -46,7 +46,7 @@ def test_searchform():
     
     # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
 
-    form = SearchSQLFORM( *fields )
+    form = QuerySQLFORM( *fields )
     # form = SQLFORM.factory( *fields )
 
     form.process(keepvalues=True)
@@ -143,8 +143,8 @@ class FormField( Field ):
     def __init__(self, field, **kwargs):
         """ field is of type Field or Expression
         """
-        if str(field).startswith('user_id'):
-            pass
+#         if str(field).startswith('user_id'):
+#             pass
  
         if not isinstance(field, Expression):
             # if first argument is not Expression
@@ -402,7 +402,7 @@ search_options = {
     'reference': ['=', '!='],
     'boolean': ['=', '!=']}
 """
-class SearchField( FormField ):
+class QueryField( FormField ):
     """New properties: comparison
     New methods: get_query, overrides  construct_new_name
     """
@@ -542,7 +542,7 @@ class SearchField( FormField ):
 
         
         
-class SearchSQLFORM (AnySQLFORM ):
+class QuerySQLFORM (AnySQLFORM ):
     
     def __init__(self, *fields,  **kwargs ):
         """
@@ -559,8 +559,8 @@ class SearchSQLFORM (AnySQLFORM ):
             for table_list in self.join_chains:
                 self.left.extend( build_join_chain( table_list ) )
                 
-        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField, **kwargs)
-        # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
+        AnySQLFORM.__init__(self, *fields, field_decorator=QueryField, **kwargs)
+        # self.formfields = [f if isinstance(f, QueryField) else QueryField(f) for f in fields ]
 
         
     def build_query(self, ignore_orphaned_fields=False):
