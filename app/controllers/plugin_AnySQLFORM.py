@@ -27,13 +27,14 @@ def test_fields():
         SearchField(db.auth_permission.id),
         
         # no_table items   
-        Field('user_id', 'reference auth_user'), 
+        Field('user_id', type='reference auth_user'), 
+#        FormField('user_id', type='reference auth_user'), 
         
-        # Field( 'somefield' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        FormField( 'direct_name', target_expression='direct_name_expr' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        # FormField( 'str_expr', name='str_expr_firstarg' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        FormField( 5, name='str_expr_firstarg' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        Field( 'bla'),
+#        FormField( 'bla'),
+#         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
+#         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
+#         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
         orphan_with_target,
         # expression (as target)
         FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
@@ -142,16 +143,25 @@ class FormField( Field ):
     def __init__(self, field, **kwargs):
         """ field is of type Field or Expression
         """
+        if str(field).startswith('user_id'):
+            pass
  
         if not isinstance(field, Expression):
-            if 'target_expression' in kwargs: # if first argument is not Expression
-                # self.target_expression = kwargs['target_expression']
+            # if first argument is not Expression
+            if 'target_expression' in kwargs: 
                 field = Field( fieldname=field ) # workaround if we get just name instead of field
+                field.target_expression = kwargs.pop('target_expression')
             elif 'name' in kwargs:
                 tmp_target_expression = field
                 field = Field( kwargs['name'] )
-                field.target_expression = tmp_target_expression
-
+                field.target_expression = Field( tmp_target_expression ) # tmp_target_expression # Field( tmp_target_expression ) is a weird workaround...
+            elif isinstance(field, str):  # in case just one string as args
+                #tmp_target_expression = field
+                field = Field( fieldname=field ) 
+                field.target_expression = field # tmp_target_expression
+            else:
+                raise ValueError("Wrong argument for FormField(..): %s" % field )
+                
  
         # try to infer TARGET_EXPRESSION and TABLENAME
         
@@ -164,16 +174,14 @@ class FormField( Field ):
         else:
             self.target_expression = field  # we leave direct connection to the field -- for data to be compared/inserted
 
-            if getattr(field, 'tablename', 'no_table') == 'no_table': # if orphan field
-                # TODO:  aliases?
-                
-                # we infer target_expression from  FK
-                # isinstance(field, Field) and 
-                if field.type.startswith('reference ') or field.type.startswith('list:reference '): 
-                    foreign_table = field.type.split()[1]
-                    self.target_expression = db[foreign_table]._id
-                    self.requires = IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) 
 
+        if isinstance(self.target_expression, Expression):
+            self.type = self.target_expression.type
+        else: 
+            type_map = {int:'integer', long:'integer', float:'double',
+                        str:'string',  unicode:'string'}
+            
+            self.type = type_map.get( type(self.target_expression), 'string')  # for str, int, etc
 
         # assign table_name if not present
         if isinstance(field, Field):   # if not bare Expression, assign some tablename
@@ -182,40 +190,51 @@ class FormField( Field ):
             self.tablename = self._tablename = field.tablename    
 
 
+
         # in rare cases    
         default_field_attrs['rname'] = getattr(field, '_rname', None)
 
-        # populate attrs for field constructor
-        # def find_out_attr(attr):
-            # #1st) look in kwargs
-            # if attr in kwargs: return kwargs.pop(attr)
-            # #2nd) maybe attr was already set to self  in previous code  
-            # elif hasattr( self, attr ):  return getattr(self, attr)  # delete it from kwargs as well
-            # #3rd) look in field attrs
-            # elif hasattr( field, attr ): return getattr(field, attr)
-            # #else
-            # else: return default_field_attrs[attr]
-
+        # populate attrs for Field constructor
         data_srcs = [kwargs, self, field, default_field_attrs]
         field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
             
-    
-            
         # call Super init
         new_name = self.construct_new_name( field, kwargs ) 
-
         Field.__init__(self, fieldname=new_name, **field_attrs)
 
         if type(field) is Field:
             self.label = self.tablename + ': ' +self.label
         
         self.__dict__.update( kwargs )
-        
-        if field.type == 'id':  # override, as otherwise field is not shown in form
-            self.type = 'integer'
-            self.requires = IS_IN_DB( db, field.table, field.table._format ) 
+
+        # some polishing for  target_expresion  (if it is Field)
+        # TODO: for Expression we could also construct IS_IN_SET or so..  (with distinct)
+        if isinstance(self.target_expression, Field):
+            if self.target_expression.tablename == 'no_table':
+                self.target_expression = self.target_expression.name  # if field is orphan, so we remember just its name
+
+            if self.tablename == 'no_table': 
+                pass # TODO:  aliases?
+
+            if hasattr(self, 'type'):
+                # f =  self.target_expression
+                
+                # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
+                if self.tablename == 'no_table': # if orphan field
+                    
+                    # we infer requires  from  FK
+                    if self.type.startswith('reference ') or self.type.startswith('list:reference '): 
+                        foreign_table = self.type.split()[1]
+                        # self.target_expression = db[foreign_table]._id  # probably better no, as looses info 
+                        self.requires = IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) 
+    
+                
+                if self.type == 'id':  # override, as otherwise field is not shown in form
+                    self.type = 'integer'
+                    self.table = db[self.tablename]
+                    self.requires = IS_IN_DB( db, self.table, self.table._format ) 
          
-         
+            
     
     def construct_new_name(self, field, kwargs ):
         """ also defaults self and field .tablename  to  "no_table" if not present """
@@ -424,11 +443,12 @@ class SearchField( FormField ):
         
         if not self.comparison:
             self.comparison = '='
-            if not isinstance( self.target_expression, str): 
-                if field.type in ('text', 'string', 'json'):
-                    if self.comparison == '=': 
-                        # comparison = 'like'     # a bit smarter ;)
-                        self.comparison = 'contains'     # a bit smarter ;)
+#            if not isinstance( self.target_expression, str):
+#             if  isinstance( self.target_expression, Expression):     
+            if field.type in ('text', 'string', 'json'):
+                if self.comparison == '=': 
+                    # comparison = 'like'     # a bit smarter ;)
+                    self.comparison = 'contains'     # a bit smarter ;)
 
 
         # name extension (based on comparison)
@@ -482,7 +502,7 @@ class SearchField( FormField ):
                     elif op == 'like': fmt="%s"
                     elif op == 'startswith': fmt="%%%s"
                     elif op == 'endswith': fmt="%s%%"
-                    return ("LOWER('%s') LIKE '"+ fmt ) % (expr, lower(val))    #TODO FIXME sqlite +"' ESCAPE '\'"     
+                    return ("LOWER('%s') LIKE '"+ fmt ) % (expr, val.lower() )    #TODO FIXME sqlite +"' ESCAPE '\'"     
                 raise RuntimeError("Invalid operation: %s %s %s" %(repr(expr), op, repr(value)) )
             
                 
@@ -550,8 +570,8 @@ class SearchSQLFORM (AnySQLFORM ):
         for f in self.formfields:
             input_value =  self.get_value( f )  # gets the input value
 #             print "DBG ", f
-            if 'some' in f.name:
-                print "DBG", f
+            # if 'some' in f.name:
+                # print "DBG", f
             expr = f.target_expression
             if isinstance(expr, Field) and expr.tablename == 'no_table':
                 if ignore_orphaned_fields:
