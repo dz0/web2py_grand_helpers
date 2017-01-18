@@ -30,7 +30,10 @@ def test_fields():
         Field('user_id', 'reference auth_user'), 
         
         # Field( 'somefield' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
-        FormField( Field( 'somefield' ), target_expression='string_value' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        FormField( 'direct_name', target_expression='direct_name_expr' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        # FormField( 'str_expr', name='str_expr_firstarg' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
+        FormField( 5, name='str_expr_firstarg' ),  # for AnySQLFORM   Field( 'somefield' ) would be enough
         orphan_with_target,
         # expression (as target)
         FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
@@ -140,12 +143,24 @@ class FormField( Field ):
         """ field is of type Field or Expression
         """
  
+        if not isinstance(field, Expression):
+            if 'target_expression' in kwargs: # if first argument is not Expression
+                # self.target_expression = kwargs['target_expression']
+                field = Field( fieldname=field ) # workaround if we get just name instead of field
+            elif 'name' in kwargs:
+                tmp_target_expression = field
+                field = Field( kwargs['name'] )
+                field.target_expression = tmp_target_expression
+
+ 
         # try to infer TARGET_EXPRESSION and TABLENAME
+        
 #         if 'user_id' in str(field):
 #             print 0
         # New PROPERTY (to remember original field/expression)
-        if hasattr(field, 'target_expression'):  # if  isinstance(field, FormField)
+        if hasattr(field, 'target_expression'):  # if  isinstance(field, FormField) or
             self.target_expression = field.target_expression
+            
         else:
             self.target_expression = field  # we leave direct connection to the field -- for data to be compared/inserted
 
@@ -153,6 +168,7 @@ class FormField( Field ):
                 # TODO:  aliases?
                 
                 # we infer target_expression from  FK
+                # isinstance(field, Field) and 
                 if field.type.startswith('reference ') or field.type.startswith('list:reference '): 
                     foreign_table = field.type.split()[1]
                     self.target_expression = db[foreign_table]._id
@@ -204,11 +220,11 @@ class FormField( Field ):
     def construct_new_name(self, field, kwargs ):
         """ also defaults self and field .tablename  to  "no_table" if not present """
         
+        
         if 'name' in kwargs:  
             new_name = kwargs.pop('name')   # required for  Expression which is not Field
         else:
-            new_name = field.name  # this is absent in Expression
-            
+
             if isinstance(field, FormField):  # we already constructed the name earlier
                 self.name = new_name = field.name  
                 return self.name
@@ -221,7 +237,10 @@ class FormField( Field ):
                 #elif field._FormField__initial_name:
                     #new_name == field._FormField__initial_name  # Mystycs: UnboundLocalError: local variable 'new_name' referenced before assignment
                 """
-        
+
+            else:  # for Field  (or Expression with name property)
+                new_name = field.name  # this is absent in Expression
+                
 
         if type(field) == Field:   #  isinstance would be bug
             # if not hasattr(field, 'tablename'):
@@ -338,10 +357,12 @@ class AnySQLFORM( ):
                 # print "DBG expr", expr
                 if type(expr) is Field:
                     row[expr.tablename][expr.name] = value
-                elif isinstance(expr, Expression): # not Field
+                elif isinstance(expr, Expression): # not  Field
                     row['_extra'][str(expr)] = value
-                else :
-                    row['_direct_values'][str(expr)] = value
+                else : # should be no_table stuff
+                    # row['_direct_values'][str(expr)] = value
+                    # row['_direct_values'][expr] = value
+                    row['_no_table'][expr] = value
         
         return Row( **row ) 
         
