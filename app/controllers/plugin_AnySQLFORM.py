@@ -41,7 +41,7 @@ def test_fields():
         FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
     ]
     
-def test_searchform():
+def test_queryform():
     fields = test_fields() 
     
     # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
@@ -287,9 +287,9 @@ class AnySQLFORM( ):
         # self.formfields = [f if isinstance(f, FormField) else FormField(f) for f in fields ]
         
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
-        factory_class= kwargs.pop('factory_class', SQLFORM)
+        form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
-        self.__form = factory_class.factory ( *self.structured_fields, table_name=self.table_name, **kwargs )
+        self.__form = form_factory ( *self.structured_fields, table_name=self.table_name, **kwargs )
 
     @staticmethod
     def traverse_fields( items, flattened, field_decorator  ):  # works recursively        
