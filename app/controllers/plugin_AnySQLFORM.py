@@ -24,7 +24,7 @@ def test_fields():
         db.auth_user.id,
         
         FormField(db.auth_permission.table_name),
-        QueryField(db.auth_permission.id),
+        SearchField(db.auth_permission.id),
         
         # no_table items   
         Field('user_id', type='reference auth_user'), 
@@ -402,7 +402,7 @@ search_options = {
     'reference': ['=', '!='],
     'boolean': ['=', '!=']}
 """
-class QueryField( FormField ):
+class SearchField( FormField ):
     """New properties: comparison
     New methods: get_query, overrides  construct_new_name
     """
@@ -559,8 +559,8 @@ class QuerySQLFORM (AnySQLFORM ):
             for table_list in self.join_chains:
                 self.left.extend( build_join_chain( table_list ) )
                 
-        AnySQLFORM.__init__(self, *fields, field_decorator=QueryField, **kwargs)
-        # self.formfields = [f if isinstance(f, QueryField) else QueryField(f) for f in fields ]
+        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField, **kwargs)
+        # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
 
         
     def build_query(self, ignore_orphaned_fields=False):
@@ -615,3 +615,152 @@ class QuerySQLFORM (AnySQLFORM ):
     # def having(self):
         # return self.build_query().having
         
+
+
+
+####### DALSELECT ##########
+from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
+
+# from pydal/adapters/base.py
+SELECT_ARGS = (
+     'orderby', 'groupby', 'limitby', 'required', 'cache', 'left', 'distinct',
+     'having', 'join', 'for_update', 'processor', 'cacheable',
+     'orderby_on_limitby'
+     )
+
+class DalView(Storage):
+    """similar as DB set, but "packs" query into kwargs 
+    and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
+    """
+    
+    def kwargs_4select(self):
+        return {key:self[key] for key in SELECT_ARGS}
+        
+    def __init__(self, *fields, **kwargs):
+        """
+        important part is join_chains -- array of join_chain (see plugin_joins_builder) 
+                         they can be reused by reactiveFORM... to figure out which tables' fields should be updated  
+                         
+        ps.:  "fields" mean more generally "columns" or "expressions". But for consistency I leave as "fields"...
+        """
+        self.fields = fields
+        
+        for key in SELECT_ARGS+('query', 'left_join_chains', 'inner_join_chains'):
+            self[key] = kwargs.get(key)
+                    
+    
+        if self.left and self.left_join_chains :
+            raise RuntimeError("Overlapping args for left...join_chains, %s" % self.left_join_chains)
+            
+        if self.join and self.inner_join_chains :
+            raise RuntimeError("Overlapping args for inner...join_chains, %s" % self.inner_join_chains)
+        
+        if not self.left :
+            self.get_join('left') # default
+            
+        if not self.join :
+            self.get_join('inner')
+            
+    def get_join_chains( type_ = 'left'):
+        #parse chains and return tablenames
+        return "TODO" 
+        
+    def get_join(self, type_='left'): # TODO: better make left as @property
+        #its a pitty, that there is left and join, but not left and inner properties...
+            
+        if type_=='left':
+            if not self.left : 
+                self.left = []
+                if self.left_join_chains:
+                    for jchain in self.left_join_chains:
+                        self.left.extend( build_join_chain(  jchain ) )
+            return self.left 
+              
+        if type_=='inner':
+            if not self.join : 
+                self.join = []
+                if self.inner_join_chains:
+                    for jchain in self.inner_join_chains:
+                        self.join.extend( build_join_chain(  jchain ) )
+            return self.join      
+                        
+    def get_sql(self):
+        return db(self.query)._select( *(self.fields), **self.kwargs_4select() )
+        
+    def execute(self): # usuall select
+        db(self.query).select( *(self.fields), **self.kwargs_4select() )
+        
+    def get_grid_kwargs(self):
+        return "TODO"
+        
+    def __call__(self):
+        return self.execute()
+        
+
+def get_expressions_form_formfields( formfields ):
+    return [f.target_expression if isinstance(f, FormField) else f     for f in formfields ]
+
+def test_dalselect():
+    fields = test_fields() 
+    
+    form = QuerySQLFORM( *fields )
+
+    form.process(keepvalues=True)
+    query_data = form.vars_as_Row()
+    query, having = form.build_query()
+    
+    cols =get_expressions_form_formfields(fields)
+    print "dbg cols", cols
+    sel = DalView(cols, query=query, having=having)
+
+
+     
+    main_table = fields[0].table
+    # search.query &= (db.auth_user.id < 5)  
+    if query==True: query = main_table.id > 0
+        
+    sql = sel.get_sql()
+    print( "DBG SQL: ", sql )
+    
+    
+    # SIMPLE DATA
+    def get_data_with_virtual():
+        # filter out virtual fields
+        virtual_fields = []
+        db_expressions = []
+        for f in selected_fields:
+            if isinstance( f, Field.Virtual ):
+               virtual_fields.append( f )
+            else: 
+                db_expressions.append( f )
+        # select        
+        data = db(search.query).select( *db_expressions, **kwargs )   
+        # put back virtual fields
+        for r in data:
+            for vf in virtual_fields:
+                r[vf.name] = vf.f(r) 
+
+        return data
+
+    # GRID
+    data = None
+    # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
+    # data = get_data_with_virtual()
+    
+
+        
+    return dict(
+            sql = sql,
+            query = query,
+            form=form, 
+            query_data = repr(data),
+            # data = data,
+            vars=form.vars,
+            # vars_dict=repr(form.vars),
+            )    
+    pass
+
+######## 
+class ReactiveSQLFORM():
+    def callback():
+        pass
