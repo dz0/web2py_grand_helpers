@@ -22,6 +22,7 @@ def test_fields():
         db.auth_user.last_name, 
         
         db.auth_user.id,
+        db.auth_group.role, # db.auth_group.description,
         
         FormField(db.auth_permission.table_name),
         SearchField(db.auth_permission.id),
@@ -51,7 +52,7 @@ def test_queryform():
 
     form.process(keepvalues=True)
     data = form.vars_as_Row()
-    query = form.build_query()
+    query = form.build_queries()
         
     return dict(
             query = query,
@@ -226,13 +227,13 @@ class FormField( Field ):
                     if self.type.startswith('reference ') or self.type.startswith('list:reference '): 
                         foreign_table = self.type.split()[1]
                         # self.target_expression = db[foreign_table]._id  # probably better no, as looses info 
-                        self.requires = IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) 
+                        self.requires = IS_EMPTY_OR( IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) )
     
                 
                 if self.type == 'id':  # override, as otherwise field is not shown in form
                     self.type = 'integer'
                     self.table = db[self.tablename]
-                    self.requires = IS_IN_DB( db, self.table, self.table._format ) 
+                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
          
             
     
@@ -426,8 +427,8 @@ class SearchField( FormField ):
             self.requires = IS_EMPTY_OR( self.requires )
             
         # assign needed properties    
-        #self.target_is_aggregate = kwargs.get('target_is_aggregate', None)  # might be used in SearchFORM build_query
-        #self.query_function = kwargs.get('query_function', None)  # might be used in SearchFORM build_query
+        #self.target_is_aggregate = kwargs.get('target_is_aggregate', None)  # might be used in SearchFORM build_queries
+        #self.query_function = kwargs.get('query_function', None)  # might be used in SearchFORM build_queries
 
         for key in ['target_is_aggregate', 'query_function']:
             if key in kwargs:
@@ -549,7 +550,7 @@ class QuerySQLFORM (AnySQLFORM ):
         if multiple tables will be in context
         should get parameter "join_chains", which is matrix of tablenames, each row represents some logicat join chain for "left" argument
         """
-        # for data model/view construction -- would be reused in build_query and  field validators IS_IN_DB
+        # for data model/view construction -- would be reused in build_queries and  field validators IS_IN_DB
         for key in 'left, join_chains, orderby, groupby, distinct'.split(', '):
             setattr(self, key, kwargs.pop(key, None) )
             
@@ -563,7 +564,7 @@ class QuerySQLFORM (AnySQLFORM ):
         # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
 
         
-    def build_query(self, ignore_orphaned_fields=False):
+    def build_queries(self, ignore_orphaned_fields=False):
         queries = []
         queries_4aggregates = []
         # for filter in flattened_filters:
@@ -609,11 +610,11 @@ class QuerySQLFORM (AnySQLFORM ):
 
     # @property
     # def query(self):
-        # return self.build_query().query
+        # return self.build_queries().query
         
     # @property
     # def having(self):
-        # return self.build_query().having
+        # return self.build_queries().having
         
 
 
@@ -634,7 +635,7 @@ class DalView(Storage):
     """
     
     def kwargs_4select(self):
-        return {key:self[key] for key in SELECT_ARGS}
+        return {key:self[key] for key in SELECT_ARGS if self[key]}
         
     def __init__(self, *fields, **kwargs):
         """
@@ -673,7 +674,7 @@ class DalView(Storage):
                 self.left = []
                 if self.left_join_chains:
                     for jchain in self.left_join_chains:
-                        self.left.extend( build_join_chain(  jchain ) )
+                        self.left.extend( build_joins_chain(  *jchain ) )
             return self.left 
               
         if type_=='inner':
@@ -683,12 +684,20 @@ class DalView(Storage):
                     for jchain in self.inner_join_chains:
                         self.join.extend( build_join_chain(  jchain ) )
             return self.join      
-                        
+
+
+    def guarantee_table_in_query(self):
+        if self.query == True:
+            main_table = self.fields[0].table
+            self.query = main_table.id > 0
+
     def get_sql(self):
-        return db(self.query)._select( *(self.fields), **self.kwargs_4select() )
+        self.guarantee_table_in_query()
+        return db(self.query)._select( *self.fields, **self.kwargs_4select() )
         
     def execute(self): # usuall select
-        db(self.query).select( *(self.fields), **self.kwargs_4select() )
+        self.guarantee_table_in_query()
+        return db(self.query).select( *self.fields, **self.kwargs_4select() )
         
     def get_grid_kwargs(self):
         return "TODO"
@@ -697,70 +706,192 @@ class DalView(Storage):
         return self.execute()
         
 
-def get_expressions_form_formfields( formfields ):
-    return [f.target_expression if isinstance(f, FormField) else f     for f in formfields ]
+def get_expressions_from_formfields( formfields, include_orphans = False ):
+    # result = []
+    # for f in formfields:
+    #     if isinstance(f, FormField):
+    #         result.append( f.target_expression )
+    #     else:
+    #         result.append( f )
+    result =  [f.target_expression if isinstance(f, FormField) else f     for f in formfields ]
+    if not include_orphans:
+        result = [expr for expr in result
+                        if isinstance(expr, Field) and getattr(expr, 'tablename', 'no_table') != 'no_table'
+                        or type(expr) is Expression
+                  ]
+    return result
 
-def test_dalselect():
+def test_dalview():
+
     fields = test_fields() 
     
     form = QuerySQLFORM( *fields )
 
     form.process(keepvalues=True)
     query_data = form.vars_as_Row()
-    query, having = form.build_query()
+    filter = form.build_queries()
     
-    cols =get_expressions_form_formfields(fields)
+    cols =get_expressions_from_formfields(fields)
     print "dbg cols", cols
-    sel = DalView(cols, query=query, having=having)
 
 
-     
     main_table = fields[0].table
     # search.query &= (db.auth_user.id < 5)  
-    if query==True: query = main_table.id > 0
-        
+    if filter.query==True: filter.query = main_table.id > 0
+
+    sel = DalView(*cols, query=filter.query, having=filter.having,
+                  left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                  )
+
     sql = sel.get_sql()
     print( "DBG SQL: ", sql )
-    
-    
-    # SIMPLE DATA
-    def get_data_with_virtual():
-        # filter out virtual fields
-        virtual_fields = []
-        db_expressions = []
-        for f in selected_fields:
-            if isinstance( f, Field.Virtual ):
-               virtual_fields.append( f )
-            else: 
-                db_expressions.append( f )
-        # select        
-        data = db(search.query).select( *db_expressions, **kwargs )   
-        # put back virtual fields
-        for r in data:
-            for vf in virtual_fields:
-                r[vf.name] = vf.f(r) 
 
-        return data
+    
 
     # GRID
     data = None
     # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
     # data = get_data_with_virtual()
+    data = sel.execute()
     
 
         
     return dict(
             sql = sql,
-            query = query,
+            filter = filter, # query and having
             form=form, 
-            query_data = repr(data),
-            # data = data,
+            # data_repr = repr(data),
+            data = data,
             vars=form.vars,
             # vars_dict=repr(form.vars),
             )    
-    pass
 
 ######## 
 class ReactiveSQLFORM():
     def callback():
         pass
+
+#
+# GrandDalView -- include translations
+class GrandRegister( Storage ):
+    """
+    search with register (and translations)
+    should look sth like:
+    >>> GrandRegister(
+        columns = [ ],
+        left_join_chains = [ [] ], # probably would be enough
+        search_fiels = [ ], 
+        search_fields_update_triggers = {None:[ ]}
+        translate_fields = [],
+    )
+    
+    mostly used for:
+       form
+       filter: query, having
+       records_w2ui
+    
+    """
+    def __init__( self, *columns, **kwargs ):
+
+        self.columns  = columns or kwargs.pop('columns')
+        self.cid =  kwargs.pop('cid', current.request.function )
+
+        self. update( kwargs )
+
+        self.search_form = QuerySQLFORM( *self.search_fields, form_factory=SQLFORM.factory )
+        self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
+
+        # self.left_join_chains = self.join_chains or [[]]
+        # self.search_fiels = self.search_fiels or columns
+
+        # self.search_fields_update_triggers                    # TODO: for ReactiveForm
+        # self.translate_fields                               # TODO: for GrandTranslator
+
+
+
+    def w2ui_grid(self):
+        # some workarounds for grand core stuff
+        request = current.request
+
+        response.subtitle = "test  w2ui_grid"
+        response.menu = []
+
+        context = dict(
+            cid = self.cid,
+            w2grid_columns=[
+                {'field': FormField(f).name, 'caption': f.label, 'size': "100%",
+                 'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
+                    for f in self.columns
+                ],
+            grid_function=request.function,  # or 'users_grid'
+            data_name=self.data_name or request.controller,
+            # w2grid_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
+            w2grid_sort=[{'field': FormField(self.columns[0]).name, 'direction': "asc"}]
+            # ,dbg = response.toolbar()
+        )
+        return context
+
+    def form_register(self):
+        # cid?
+        self.search_form.process(keepvalues=True)
+
+        return dict(search_form=self.search_form, w2ui_grid = self.w2ui_grid() )
+
+    # def search_filter(self):
+    #     " query and having "
+    #     return self.search_form().build_queries()
+
+
+    # # SIMPLE DATA -- ok for w2ui_records
+    # def get_data_with_virtual(self):  # but what about column sequence?
+    #     # filter out virtual fields
+    #     virtual_fields = []
+    #     db_expressions = []
+    #     for f in self.columns:
+    #         if isinstance(f, Field.Virtual):
+    #             virtual_fields.append(f)
+    #         else:
+    #             db_expressions.append(f)
+    #     # select
+    #     data = self.selection.execute()
+    #     # put back virtual fields
+    #     for r in data:
+    #         for vf in virtual_fields:
+    #             r[vf.name] = vf.f(r)
+    #
+    #     return data
+
+    def records_w2ui(self):
+
+        filter = self.search_form().build_queries()
+
+        selection = DalView(*self.columns, query=filter.query, having=filter.having,
+                      left_join_chains=self.join_chains,
+                      )
+
+        rows = self.selection.execute()
+        # return rows.render()
+
+        return rows.render()
+
+
+def test_grandform():
+    search_fields = test_fields()
+    cols = get_expressions_from_formfields(search_fields )
+
+    register = GrandRegister(cols,
+                             search_fields = search_fields ,
+                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]],
+                             )
+
+    # response.view = ...
+    if request.vars.grid:
+        response.view = "generic.json"
+        return register.records_w2ui()
+
+    else:
+        # response.view = "plugin_w2ui_grid/w2ui_grid.html"
+        return register.form_register()
+
+
+
