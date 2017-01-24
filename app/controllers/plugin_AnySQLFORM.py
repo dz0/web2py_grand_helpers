@@ -48,16 +48,15 @@ def test_queryform():
     # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
 
     form = QuerySQLFORM( *fields )
-    # form = SQLFORM.factory( *fields )
-
     form.process(keepvalues=True)
-    data = form.vars_as_Row()
-    query = form.build_queries()
+    query_data = form.vars_as_Row()
+    form.check_duplicate_fields_by_attrs('target_expression')
+    filter = form.build_queries()
         
     return dict(
-            query = query,
+            filter = filter,
             form=form, 
-            data_dict = repr(data),
+            query_data = repr(query_data),
             # data = data,
             vars=form.vars,
             # vars_dict=repr(form.vars),
@@ -198,42 +197,57 @@ class FormField( Field ):
         # populate attrs for Field constructor
         data_srcs = [kwargs, self, field, default_field_attrs]
         field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
-            
+
+
         # call Super init
+
         new_name = self.construct_new_name( field, kwargs ) 
         Field.__init__(self, fieldname=new_name, **field_attrs)
 
         if type(field) is Field:
             self.label = self.tablename + ': ' +self.label
-        
+
         self.__dict__.update( kwargs )
 
-        # some polishing for  target_expresion  (if it is Field)
-        # TODO: for Expression we could also construct IS_IN_SET or so..  (with distinct)
+        # some polishing
+
+        # for  target_expresion  (if it is Expression)
+        if type(self.target_expression) == Expression:
+            self.target_expression.name = self.name  # if name is given to FormField -- forward it to target_expresssion -- though can overlap if several fields have same ...
+            # self.target_expression.name = field_attrs.get('name')  # if name is given to FormField -- forward it to target_expresssion -- though can overlap if several fields have same ...
+            self.target_expression.label = self.label
+
+
+        # for  target_expresion  (if it is Field)
         if isinstance(self.target_expression, Field):
+
+            # if field is orphan, so we remember just its name
             if self.target_expression.tablename == 'no_table':
-                self.target_expression = self.target_expression.name  # if field is orphan, so we remember just its name
+                self.target_expression = self.target_expression.name
 
             if self.tablename == 'no_table': 
                 pass # TODO:  aliases?
 
-            if hasattr(self, 'type'):
-                # f =  self.target_expression
-                
-                # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
-                if self.tablename == 'no_table': # if orphan field
-                    
-                    # we infer requires  from  FK
-                    if self.type.startswith('reference ') or self.type.startswith('list:reference '): 
-                        foreign_table = self.type.split()[1]
-                        # self.target_expression = db[foreign_table]._id  # probably better no, as looses info 
-                        self.requires = IS_EMPTY_OR( IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) )
-    
-                
-                if self.type == 'id':  # override, as otherwise field is not shown in form
-                    self.type = 'integer'
-                    self.table = db[self.tablename]
-                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
+        # for   field   widgets
+        # TODO: for Expression we could also construct IS_IN_SET or so..  (with distinct)
+
+        if hasattr(self, 'type'):
+            # f =  self.target_expression
+
+            # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
+            if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field
+
+                # we infer requires  from  FK
+                if self.type.startswith('reference ') or self.type.startswith('list:reference '):
+                    foreign_table = self.type.split()[1]
+                    # self.target_expression = db[foreign_table]._id  # probably better no, as looses info
+                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) )
+
+
+            if self.type == 'id':  # override, as otherwise field is not shown in form
+                self.type = 'integer'
+                self.table = db[self.tablename]
+                self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
          
             
     
@@ -260,7 +274,7 @@ class FormField( Field ):
 
             else:  # for Field  (or Expression with name property)
                 new_name = field.name  # this is absent in Expression
-                
+
 
         if type(field) == Field:   #  isinstance would be bug
             # if not hasattr(field, 'tablename'):
@@ -286,11 +300,18 @@ class AnySQLFORM( ):
         self.formfields = []
         self.structured_fields = self.traverse_fields( fields, self.formfields, field_decorator  )
         # self.formfields = [f if isinstance(f, FormField) else FormField(f) for f in fields ]
-        
+
+        # assertions
+        try:
+            self.check_duplicate_fields_by_attrs('name')
+        except RuntimeError as e:
+            raise RuntimeError("Form fields shouldn't have same names. \n %s" % e)
+
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
         form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
         self.__form = form_factory ( *self.structured_fields, table_name=self.table_name, **kwargs )
+        print "dbg form", self.__form
 
     @staticmethod
     def traverse_fields( items, flattened, field_decorator  ):  # works recursively        
@@ -319,49 +340,73 @@ class AnySQLFORM( ):
 
     
     def __getattr__( self, name ):
+        # try:
+        #     object.__getattribute__(self, name)
+        # except AttributeError as e:
+
         if name in  self.__dict__:
             return  self.__dict__[ name ]
         else:
-            return getattr( self.__form, name )      
-
-    def get_field(self, arg, **kwargs ):
-        rez = []
-        for f in self.formfields:
-            if isinstance(arg, str):
-                if f.name == arg:
-                    rez.append(  f )
-
-            if isinstance(arg, Expression):  # TODO: what if target_expression is direct value (int, str)?
-                def match_kwargs(): # helper 
-                    for key, val in kwargs.items():
-                        if (not hasattr(f, key)
-                        or getattr(f, key) != val):
-                            return False
-                    return True
-                    
-                if f.target_expression == arg and match_kwargs():
-                    rez.append(  f )
-        
-        if len(rez)==1:
-            return rez[0]
-        
-        return rez
-        # elif len(rez)>1:
-            # return rez
+        # elif '__form' in self.__dict__:
+            return getattr(self._AnySQLFORM__form, name)
+            # return object.__getattribute__(self.__form, name)
         # else:
-            # raise KeyError("FormField '%s' not found" % arg)
-        
+        #     raise AttributeError("Attribute %s  not found in  %s (__form)" % (name, self))
+
+        # try:
+        #     return getattr( self.__form, name )
+        # except AttributeError as e:
+        #     raise AttributeError("Attribute %s  not found in  %s" % (name, self) )
+
+    def find_fields(self, **kwargs):
+        def match_kwargs(f):  # helper
+            for key, val in kwargs.items():
+                if (
+                    not hasattr(f, key)
+                    or not( getattr(f, key) == val )
+                    or not( str(getattr(f, key)) == str(val) )  # for instances of same Class, example, Expression
+                    ):
+                    return False
+            return True
+        return [f    for f in self.formfields     if match_kwargs(f)]
+
+
+    def get_field(self, arg=None, **kwargs ):
+        "finds field(s) according to their name / target_expression or other attr"
+        if isinstance(arg, Expression):
+            kwargs['target_expression'] = arg
+        if isinstance(arg, str):
+            kwargs['name'] = arg
+
+        result = self.find_fields( **kwargs)
+
+        if len(result)==1:
+            return result[0]
+        elif len(result) > 1 :
+            raise RuntimeError("Duplicate  %s in fields %s" % (arg, result))
+        # raise KeyError("FormField '%s' not found" % arg)
+
+    def check_duplicate_fields_by_attrs(self, *attr_names):
+        for f in self.formfields:
+            attrs = {  aname: getattr(f, aname)  for aname in attr_names  }
+            fields = self.find_fields( **attrs )
+            if len(fields) > 1:
+                raise RuntimeError("Duplicatesin fields %s  %s" % (map(str,fields), attrs))
+        return True
+
+
     def get_value(self, field, vars=None):
-        
         if not vars:
             # default to self.vars
             if not self.vars: self.process(keepvalues=True) # or self.__form.process()
             vars = self.vars
-
         # return current.request.vars.get( field.name, None ) 
         
         return vars[field.name] # could be request vars
         
+
+
+
 
     def vars_as_Row( self, vars=None ): # but types are not checked/converted
         row = defaultdict( dict )
@@ -557,11 +602,18 @@ class QuerySQLFORM (AnySQLFORM ):
         
         if self.join_chains and not self.left:
             self.left = []
-            for table_list in self.join_chains:
-                self.left.extend( build_join_chain( table_list ) )
+            for jchain in self.join_chains:
+                self.left.extend( build_join_chain( jchain ) )
                 
         AnySQLFORM.__init__(self, *fields, field_decorator=SearchField, **kwargs)
         # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
+        # assertions
+        try:
+            self.check_duplicate_fields_by_attrs('target_expression', 'comparison')
+        except RuntimeError as e:
+            raise RuntimeError("QueryForm fields shouldn't have same combination of expression and comparison. \n %s" % e)
+
+
 
         
     def build_queries(self, ignore_orphaned_fields=False):
@@ -721,46 +773,34 @@ def get_expressions_from_formfields( formfields, include_orphans = False ):
                   ]
     return result
 
-def test_dalview():
+def test_dalview_search():
 
     fields = test_fields() 
     
     form = QuerySQLFORM( *fields )
-
     form.process(keepvalues=True)
     query_data = form.vars_as_Row()
+    form.check_duplicate_fields_by_attrs('target_expression')
     filter = form.build_queries()
     
-    cols =get_expressions_from_formfields(fields)
+    cols = get_expressions_from_formfields(fields)
     print "dbg cols", cols
 
-
-    main_table = fields[0].table
-    # search.query &= (db.auth_user.id < 5)  
-    if filter.query==True: filter.query = main_table.id > 0
-
-    sel = DalView(*cols, query=filter.query, having=filter.having,
+    selection = DalView(*cols, query=filter.query, having=filter.having,
                   left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                   )
 
-    sql = sel.get_sql()
+    sql = selection.get_sql()
     print( "DBG SQL: ", sql )
 
-    
-
-    # GRID
-    data = None
     # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
-    # data = get_data_with_virtual()
-    data = sel.execute()
-    
+    data = selection.execute()
 
-        
     return dict(
             sql = sql,
             filter = filter, # query and having
             form=form, 
-            # data_repr = repr(data),
+            # query_data = repr(query_data),
             data = data,
             vars=form.vars,
             # vars_dict=repr(form.vars),
@@ -863,25 +903,26 @@ class GrandRegister( Storage ):
 
     def records_w2ui(self):
 
-        filter = self.search_form().build_queries()
+        filter = self.search_form.build_queries()
 
-        selection = DalView(*self.columns, query=filter.query, having=filter.having,
-                      left_join_chains=self.join_chains,
+        self.selection = DalView(*self.columns, query=filter.query, having=filter.having,
+                      left_join_chains=self.left_join_chains
                       )
 
         rows = self.selection.execute()
         # return rows.render()
 
-        return rows.render()
+        # return rows.render()
+        return rows
 
 
 def test_grandform():
     search_fields = test_fields()
     cols = get_expressions_from_formfields(search_fields )
 
-    register = GrandRegister(cols,
+    register = GrandRegister(*cols,
                              search_fields = search_fields ,
-                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]],
+                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              )
 
     # response.view = ...
