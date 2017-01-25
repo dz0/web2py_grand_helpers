@@ -13,18 +13,19 @@ from pydal._globals import DEFAULT
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
 # test fields
-orphan_with_target = Field('orphan_name')
-orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 def test_fields():
-  return [
+    orphan_with_target = Field('orphan_name')
+    orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 
-        db.auth_user.first_name, 
-        db.auth_user.last_name, 
+    return [
+
+        db.auth_user.first_name,
+        db.auth_user.email,
         
         db.auth_user.id,
         db.auth_group.role, # db.auth_group.description,
         
-        FormField(db.auth_permission.table_name),
+        FormField(db.auth_permission.table_name, requires = IS_IN_DB(db, db.auth_permission.table_name, multiple=True)),
         SearchField(db.auth_permission.id),
         
         # no_table items   
@@ -48,7 +49,6 @@ def test_queryform():
     # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
 
     form = QuerySQLFORM( *fields )
-    form.process(keepvalues=True)
     query_data = form.vars_as_Row()
     form.check_duplicate_fields_by_attrs('target_expression')
     filter = form.build_queries()
@@ -75,7 +75,6 @@ def test_anyform():
     form = AnySQLFORM( *fields )
     # form = SQLFORM.factory( *fields )
 
-    form.process(keepvalues=True)
     data = form.vars_as_Row()
         
     return dict(
@@ -398,17 +397,23 @@ class AnySQLFORM( ):
     def get_value(self, field, vars=None):
         if not vars:
             # default to self.vars
-            if not self.vars: self.process(keepvalues=True) # or self.__form.process()
+            if not self.vars:
+                # session=None, formname=None  ---  to prevent _formkey (and _formname), which later wouldn't let multiple times access via ajax
+                self.process(session=None, formname=None, keepvalues=True, hideerror=True, dbio=False)
+                # self.process(keepvalues=True, hideerror=True, dbio=False)
             vars = self.vars
         # return current.request.vars.get( field.name, None ) 
         
         return vars[field.name] # could be request vars
-        
-
-
 
 
     def vars_as_Row( self, vars=None ): # but types are not checked/converted
+        """
+        Nicely groups form input values according to their target tables
+        FIXME:  if target (field/expr)  has several inputs, only the last's value is stored :/
+        :param vars:
+        :return: Row object
+        """
         row = defaultdict( dict )
         
         # if vars is None:
@@ -417,7 +422,7 @@ class AnySQLFORM( ):
         for f in self.formfields:
             # if f.name in vars:  # this would cause some of stuff missing..
                 # value = vars[f.name]
-                value = self.get_value( f )
+                value = self.get_value( f , vars=vars)
                 expr = f.target_expression  # todo -- what if it is missing?
                 # print "DBG expr", expr
                 if type(expr) is Field:
@@ -591,21 +596,26 @@ class SearchField( FormField ):
 class QuerySQLFORM (AnySQLFORM ):
     
     def __init__(self, *fields,  **kwargs ):
-        """
+
+        """  Moved to GrandRegister  DalView
+
         if multiple tables will be in context
         should get parameter "join_chains", which is matrix of tablenames, each row represents some logicat join chain for "left" argument
-        """
+
+
         # for data model/view construction -- would be reused in build_queries and  field validators IS_IN_DB
-        for key in 'left, join_chains, orderby, groupby, distinct'.split(', '):
-            setattr(self, key, kwargs.pop(key, None) )
-            
-        
-        if self.join_chains and not self.left:
-            self.left = []
-            for jchain in self.join_chains:
-                self.left.extend( build_join_chain( jchain ) )
-                
-        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField, **kwargs)
+        # for key in 'left, join_chains, orderby, groupby, distinct'.split(', '):
+        #     setattr(self, key, kwargs.pop(key, None) )
+        #
+        #
+        # if self.join_chains and not self.left:
+        #     self.left = []
+        #     for jchain in self.join_chains:
+        #         self.left.extend( build_join_chain( jchain ) )
+        """
+        # table_name = kwargs.pop('table_name', 'QuerySQLFORM'),
+        kwargs.setdefault('table_name', 'QuerySQLFORM')
+        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
         # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
         # assertions
         try:
@@ -778,11 +788,11 @@ def test_dalview_search():
     fields = test_fields() 
     
     form = QuerySQLFORM( *fields )
-    form.process(keepvalues=True)
-    query_data = form.vars_as_Row()
+
     form.check_duplicate_fields_by_attrs('target_expression')
     filter = form.build_queries()
-    
+    query_data = form.vars_as_Row()
+
     cols = get_expressions_from_formfields(fields)
     print "dbg cols", cols
 
@@ -820,8 +830,8 @@ class GrandRegister( Storage ):
     >>> GrandRegister(
         columns = [ ],
         left_join_chains = [ [] ], # probably would be enough
-        search_fiels = [ ], 
-        search_fields_update_triggers = {None:[ ]}
+        search_fields = [ ],
+        search_fields_update_triggers = {None:[ ]},
         translate_fields = [],
     )
     
@@ -831,18 +841,43 @@ class GrandRegister( Storage ):
        records_w2ui
     
     """
-    def __init__( self, *columns, **kwargs ):
+    def __init__( self,
+                  columns,
 
-        self.columns  = columns or kwargs.pop('columns')
+                  left_join_chains = None, # probably would be enough
+                  search_fields = None,
+                  search_fields_update_triggers = None,
+                  translate_fields = None,
+
+
+                  **kwargs # form_factory
+                ):
+
+
+        self.columns  = columns
         self.cid =  kwargs.pop('cid', current.request.function )
+
+        self.left_join_chains = left_join_chains  # probably would be enough
+        self.search_fields = search_fields
+        # self.search_fields.append( SearchField('grid') )
+
+        self.search_fields_update_triggers = search_fields_update_triggers
+        self.translate_fields = translate_fields
+
+        kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
 
         self. update( kwargs )
 
-        self.search_form = QuerySQLFORM( *self.search_fields, form_factory=SQLFORM.factory )
+        self.search_form = QuerySQLFORM( *self.search_fields, **kwargs )
         self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
+
+
 
         # self.left_join_chains = self.join_chains or [[]]
         # self.search_fiels = self.search_fiels or columns
+
+        self.selection = DalView(*self.columns,  left_join_chains=self.left_join_chains )
+        # self.colums = self.selection.fields
 
         # self.search_fields_update_triggers                    # TODO: for ReactiveForm
         # self.translate_fields                               # TODO: for GrandTranslator
@@ -873,8 +908,6 @@ class GrandRegister( Storage ):
 
     def form_register(self):
         # cid?
-        self.search_form.process(keepvalues=True)
-
         return dict(search_form=self.search_form, w2ui_grid = self.w2ui_grid() )
 
     # def search_filter(self):
@@ -901,26 +934,104 @@ class GrandRegister( Storage ):
     #
     #     return data
 
-    def records_w2ui(self):
-
+    def get_selection(self):
+        """get selection by filter of current request """
         filter = self.search_form.build_queries()
 
         self.selection = DalView(*self.columns, query=filter.query, having=filter.having,
-                      left_join_chains=self.left_join_chains
-                      )
+                                 left_join_chains=self.left_join_chains
+                                 )
 
-        rows = self.selection.execute()
-        # return rows.render()
+        return self.selection
 
-        # return rows.render()
+    def records_w2ui(self):
+
+        # def get_row_field_value(record, colname, columns=None, sqlrows=None):
+        #     """finds column value in rows by colname
+        #     taken from SQLTABLE
+        #     also tries to get some extra info (field)
+        #     """
+        #
+        #     if not columns:
+        #         columns = list(sqlrows.colnames)
+        #     for colname in columns:
+        #         matched_column_field = \
+        #             db._adapter.REGEX_TABLE_DOT_FIELD.match(colname)
+        #         if not matched_column_field:
+        #             if "_extra" in record and colname in record._extra:
+        #                 r = record._extra[colname]
+        #                 row.append(TD(r))
+        #                 continue
+        #             else:
+        #                 raise KeyError(
+        #                     "Column %s not found (SQLTABLE)" % colname)
+        #         (tablename, fieldname) = matched_column_field.groups()
+        #         colname = tablename + '.' + fieldname
+        #         try:
+        #             field = sqlrows.db[tablename][fieldname]
+        #         except (KeyError, AttributeError):
+        #             field = None
+        #         if tablename in record \
+        #                 and isinstance(record, Row) \
+        #                 and isinstance(record[tablename], Row):
+        #             r = record[tablename][fieldname]
+        #         elif fieldname in record:
+        #             r = record[fieldname]
+        #         else:
+        #             raise SyntaxError('something wrong in Rows object')
+        #         return r
+
+        # in real usecase - we want to RENDER first
+        def rows_rendered_flattened(rows):
+            colnames = rows.colnames
+            rows.compact = False
+            rows = rows.render()  # apply represent methods
+
+            # rows = [ r.as_dict() for r in rows ]  # rows.as_list()
+
+            # flatten (with forsed .compact) --- some option in w2p might allow field instead of table.field if jus one table in play
+            def flatten(rows_as_list):
+                return[  { field if table == '_extra'   else table+'.'+field : val
+                                            for table, fields in row.items()    for field, val in fields.items() }
+                          for row in rows_as_list ]
+            rows = flatten(rows)
+            # rows = [colnames] + [[ row[col]  for col in colnames ] for row in rows ]
+            # result =  TABLE(rows)  # nicer testing
+            return rows
+
+        # get rows
+        rows = self.get_selection().execute()
+
+        # map to w2ui colnames
+
+        rows =  rows_rendered_flattened(rows)
+        def map_w2ui_colnames(rows_flattened):
+            rez = {}
+            for col in self.columns:
+                # key = str(col.target_expression)
+                # src_key = str(col.target_expression if hasattr(col, 'target_expression')   else  col)
+                src_key = str( FormField(col).target_expression )
+                dest_key = FormField(col).name
+                rez[dest_key] = rows_flattened[src_key]
+            return rez
+
+        rows =  [ map_w2ui_colnames( row) for row in rows ]
+
+        def as_htmltable(rows, colnames):
+            return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
+
+
+        # rows = as_htmltable(rows, [FormField(col).name for col in self.columns]) # for testing
+
         return rows
 
 
-def test_grandform():
+def test_grandform_ajax_records():
     search_fields = test_fields()
     cols = get_expressions_from_formfields(search_fields )
 
-    register = GrandRegister(*cols,
+    register = GrandRegister(cols,
+                             table_name = 'test_grand',
                              search_fields = search_fields ,
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              )
@@ -928,11 +1039,38 @@ def test_grandform():
     # response.view = ...
     if request.vars.grid:
         response.view = "generic.json"
-        return register.records_w2ui()
+
+        rows = register.records_w2ui()
+
+        # return BEAUTIFY(  [ filter, rows ]  )  # for testing
+
+        return dict( records = rows )  # JSON
+
+        # return DIV( filter, register.records_w2ui() )
+        # return dict(records=register.records_w2ui())
 
     else:
         # response.view = "plugin_w2ui_grid/w2ui_grid.html"
-        return register.form_register()
+        # register.search_form.      add_button( 'grid', URL(vars=dict(grid=True)))
 
+        result = register.form_register()
+
+        # for debug purposes:
+        # tablename = register.search_form.table._tablename
+        ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % ( URL(vars=dict(grid=True), extension=None)  ,
+                                                        [f.name for f in register.search_fields] )
+        # register.search_form.      add_button( 'ajax load records', ajax_url )
+        # result['ajax_records']=
+        register.search_form[0].insert(0, A('ajax load records', _href=ajax_url))
+
+        result['ats']=DIV( BEAUTIFY(register.records_w2ui() ), _id='grid_records')
+
+
+
+        return result
+
+
+class GrandTranslator():
+    pass
 
 
