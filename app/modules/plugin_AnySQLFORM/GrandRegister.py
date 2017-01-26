@@ -324,7 +324,7 @@ class GrandRegister( object ):
             from gluon.html import TABLE
             return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
 
-        rows = as_htmltable(rows, [FormField(col).name for col in self.columns]) # for testing
+        # rows = as_htmltable(rows, [FormField(col).name for col in self.columns]) # for testing
 
         return rows
 

@@ -130,14 +130,22 @@ def test_grandform_ajax_records(  ):
                              )
 
     # response.view = ...
-    if request.vars.grid:
+    if request.vars._grid:
         response.view = "generic.json"
 
         rows = register.records_w2ui()
 
         # return BEAUTIFY(  [ filter, rows ]  )  # for testing
 
-        return dict( records = rows )  # JSON
+        if request.vars._grid_dbg:
+            def as_htmltable(rows, colnames):
+                from gluon.html import TABLE
+                return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
+            rows = as_htmltable(rows, [FormField(col).name for col in register.columns]) # for testing
+
+        # from gluon.serializers import json
+        # return json(dict(status='success', records = rows ))
+        return dict(status='success', records = rows )  # JSON
 
         # return DIV( filter, register.records_w2ui() )
         # return dict(records=register.records_w2ui())
@@ -150,8 +158,11 @@ def test_grandform_ajax_records(  ):
 
         # for debug purposes:
         # tablename = register.search_form.table._tablename
-        ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % ( URL(vars=dict(grid=True), extension=None)  ,
-                                                        [f.name for f in register.search_fields] )
+        ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
+                                                URL(vars=dict(_grid=True, _grid_dbg=True), extension=None)  ,
+                                                [f.name for f in register.search_fields]
+                   )
+
         ajax_link = A('ajax load records', _href=ajax_url)
         ajax_result_target = DIV( BEAUTIFY(register.records_w2ui() ), _id='grid_records')
         # register.search_form.      add_button( 'ajax load records', ajax_url )
