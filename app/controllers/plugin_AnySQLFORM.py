@@ -115,16 +115,18 @@ def test_dalview_search():
             )    
 
 
+# def grandform( form_factory=SQLFORM.factory ):
 
-
-def test_grandform_ajax_records():
+def test_grandform_ajax_records(  ):
     search_fields = test_fields()
     cols = get_expressions_from_formfields(search_fields )
 
     register = GrandRegister(cols,
+                             cid = 'w2ui_test', # w2ui
                              table_name = 'test_grand',
-                             search_fields = search_fields ,
+                             search_fields = [search_fields ],
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             # , response_view = None
                              )
 
     # response.view = ...
@@ -150,13 +152,17 @@ def test_grandform_ajax_records():
         # tablename = register.search_form.table._tablename
         ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % ( URL(vars=dict(grid=True), extension=None)  ,
                                                         [f.name for f in register.search_fields] )
+        ajax_link = A('ajax load records', _href=ajax_url)
+        ajax_result_target = DIV( BEAUTIFY(register.records_w2ui() ), _id='grid_records')
         # register.search_form.      add_button( 'ajax load records', ajax_url )
         # result['ajax_records']=
-        register.search_form[0].insert(0, A('ajax load records', _href=ajax_url))
+        # result['ats']=ajax_result_target
 
-        result['ats']=DIV( BEAUTIFY(register.records_w2ui() ), _id='grid_records')
-
+        # register.search_form[0].insert(0, ajax_link)
+        result['form'] = CAT(ajax_result_target , ajax_link, result['form'] )
 
 
         return result
+
+
 

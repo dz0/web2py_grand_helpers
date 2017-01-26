@@ -46,6 +46,8 @@ class DalView(Storage):
             
         if not self.join :
             self.get_join('inner')
+
+        self.kwargs = kwargs
             
     def get_join_chains( type_ = 'left'):
         #parse chains and return tablenames
@@ -67,7 +69,7 @@ class DalView(Storage):
                 self.join = []
                 if self.inner_join_chains:
                     for jchain in self.inner_join_chains:
-                        self.join.extend( build_join_chain(  jchain ) )
+                        self.join.extend( build_joins_chain(  jchain ) )
             return self.join      
 
 
@@ -94,7 +96,8 @@ class DalView(Storage):
 
 #
 # GrandDalView -- include translations
-class GrandRegister( Storage ):
+# class GrandRegister( Storage ):
+class GrandRegister( object ):
     """
     search with register (and translations)
     should look sth like:
@@ -119,25 +122,43 @@ class GrandRegister( Storage ):
                   search_fields = None,
                   search_fields_update_triggers = None,
                   translate_fields = None,
+                  response_view = "plugin_w2ui_grid/w2ui_grid.html",
 
 
                   **kwargs # form_factory
                 ):
 
+        request = current.request
+        # for w2ui_grid response_view
+        self.cid =  kwargs.pop('cid', request.function )
+        self.grid_function =  kwargs.pop('grid_function', request.function)
+        self.data_name =  kwargs.pop('data_name',  request.controller)
+
 
         self.columns  = columns
-        self.cid =  kwargs.pop('cid', current.request.function )
-
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
         # self.search_fields.append( SearchField('grid') )
 
         self.search_fields_update_triggers = search_fields_update_triggers
+
+
+
+
         self.translate_fields = translate_fields
+        self.response_view = response_view
 
-        kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
+        self.kwargs = kwargs
 
-        self. update( kwargs )
+        # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
+        def my_grand_search_form(*fields, **kwargs):
+            from applications.app.modules.searching import search_form as grand_search_form
+            return grand_search_form(self.cid, *fields, **kwargs)
+
+        kwargs.setdefault( 'form_factory', my_grand_search_form )
+        # a bit smarter way -- in case   kwargs['form_factory'] is None
+        # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
+        # kwargs['form_factory'] = self.form_factory
 
         self.search_form = QuerySQLFORM( *self.search_fields, **kwargs )
         self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
@@ -147,18 +168,20 @@ class GrandRegister( Storage ):
         # self.left_join_chains = self.join_chains or [[]]
         # self.search_fiels = self.search_fiels or columns
 
-        self.selection = DalView(*self.columns,  left_join_chains=self.left_join_chains )
+        self.selection = DalView(*self.columns,  left_join_chains=self.left_join_chains, **kwargs )
         # self.colums = self.selection.fields
 
         # self.search_fields_update_triggers                    # TODO: for ReactiveForm
         # self.translate_fields                               # TODO: for GrandTranslator
 
 
-
     def w2ui_grid(self):
         # some workarounds for grand core stuff
+
         request = current.request
         response = current.response
+
+        if self.response_view: response.view = self.response_view
 
         response.subtitle = "test  w2ui_grid"
         response.menu = []
@@ -170,17 +193,21 @@ class GrandRegister( Storage ):
                  'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
                     for f in self.columns
                 ],
-            grid_function=request.function,  # or 'users_grid'
-            data_name=self.data_name or request.controller,
+            grid_function=self.grid_function,  # or 'users_grid'
+            data_name=self.data_name ,
             # w2grid_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
-            w2grid_sort=[{'field': FormField(self.columns[0]).name, 'direction': "asc"}]
+            w2grid_sort=[{'field': FormField(self.columns[0]).name, 'direction': "asc"}],
+            # table_name
+            **self.kwargs
             # ,dbg = response.toolbar()
         )
         return context
 
     def form_register(self):
         # cid?
-        return dict(search_form=self.search_form, w2ui_grid = self.w2ui_grid() )
+        context = self.w2ui_grid()
+        context['form'] =  self.search_form
+        return context
 
     # def search_filter(self):
     #     " query and having "
@@ -210,8 +237,12 @@ class GrandRegister( Storage ):
         """get selection by filter of current request """
         filter = self.search_form.build_queries()
 
-        self.selection = DalView(*self.columns, query=filter.query, having=filter.having,
-                                 left_join_chains=self.left_join_chains
+        self.selection = DalView(*self.columns,
+                                 query=filter.query, having=filter.having,
+
+                                 left_join_chains=self.left_join_chains,
+                                 # group order distinct
+                                 **self.kwargs
                                  )
 
         return self.selection

@@ -14,13 +14,13 @@
             {{ block w2ui_grid_actions }} 
             
             show: {
-                {{ if auth.has_permission('add', data_name ):# or DBG(): }}
+                {{ #if auth.has_permission('add', data_name ):# or DBG(): }}
                     toolbarAdd: true,
                 {{ pass }}
-                {{ if auth.has_permission('edit',  data_name):# or DBG(): }}
+                {{ #if auth.has_permission('edit',  data_name):# or DBG(): }}
                     toolbarEdit: true,
                 {{ pass }}
-                {{ if auth.has_permission('delete', data_name):# or DBG(): }}
+                {{ #if auth.has_permission('delete', data_name):# or DBG(): }}
                     toolbarDelete: true,
                 {{ pass }}
             },
@@ -28,9 +28,10 @@
             onAdd: function(event){
                 // addUser();
                 //ajaxForm_popup(popup_name, title, form_name, url, data, options)
+                {{ context_name = data_name or table_name or cid }}
                 ajaxForm_popup(  
                               "{{ =data_name }}", 
-                              "{{ =T( context +'__add_form' ) }}", 
+                              "{{ =T( context_name +'__add_form' ) }}",
                               "add_{{ =data_name }}",
                               "{{ =URL(request.controller, 'add_' + data_name) }}"
                                );

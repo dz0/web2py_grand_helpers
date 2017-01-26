@@ -221,15 +221,41 @@ class FormField( Field ):
     def get_query(self, val):
         return self.target_expression == val
         
-        
-class AnySQLFORM( ):  
+def traverse_fields(items, flattened, field_decorator):  # works recursively
+    """ is needed for SOLIDFORM, because it gets  *fields  matrix,    not flat list
+    Recursivelly makes fields FormField (or so) instances and generates flattened list
+    """
+    result = []
+    for nr, item in enumerate(items):
+
+        if isinstance(item, (list, tuple)):  # if we get a list
+            result.append(traverse_fields(item, flattened, field_decorator))  # apply recursively
+
+        else:  # simple field
+
+            #  make FormField instance if needed
+            if not isinstance(item, field_decorator):
+                item = field_decorator(item)  # apply with defaults
+
+            # item.writable = True
+            # item.readable = True
+            result.append(item)
+            # print( "DBG field name:", item.name )
+            flattened.append(item)
+
+    return result
+
+class AnySQLFORM( object  ):
     """Works as proxy """
     def __init__(self, *fields,  **kwargs ):  #
         # SQLFORM.__init__(self, *fields, **kwargs )
     
         field_decorator = kwargs.pop('field_decorator', FormField)
+
+
+
         self.formfields = []
-        self.structured_fields = self.traverse_fields( fields, self.formfields, field_decorator  )
+        self.structured_fields = traverse_fields( fields, self.formfields, field_decorator  )
         # self.formfields = [f if isinstance(f, FormField) else FormField(f) for f in fields ]
 
         # assertions
@@ -241,35 +267,15 @@ class AnySQLFORM( ):
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
         form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
+
+        kwargs.setdefault('formstyle', 'table2cols')
+
         self.__form = form_factory ( *self.structured_fields, table_name=self.table_name, **kwargs )
         # print "dbg form", self.__form
         
         self.db = current.db
 
-    @staticmethod
-    def traverse_fields( items, flattened, field_decorator  ):  # works recursively        
-        """ is needed for SOLIDFORM, because it gets  *fields  matrix,    not flat list 
-        Recursivelly makes fields FormField (or so) instances and generated flattened list
-        """
-        result = []
-        for nr, item in enumerate(items):
-            
-            if isinstance(item, (list, tuple)):  # if we get a list
-                result.append( traverse_fields( item , flattened, field_decorator ))  # apply recursively
-                
-            else:      # simple field
-                
-                #  make FormField instance if needed
-                if not isinstance( item, field_decorator  ):  
-                    item = field_decorator ( item ) # apply with defaults
-                    
-                # item.writable = True
-                # item.readable = True            
-                result.append( item )
-                # print( "DBG field name:", item.name )
-                flattened.append( item )
-        
-        return result
+
 
     
     def __getattr__( self, name ):
@@ -549,7 +555,8 @@ class QuerySQLFORM (AnySQLFORM ):
         """
         # table_name = kwargs.pop('table_name', 'QuerySQLFORM'),
         kwargs.setdefault('table_name', 'QuerySQLFORM')
-        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
+        # AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
+        super(QuerySQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
         # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
         # assertions
         try:
