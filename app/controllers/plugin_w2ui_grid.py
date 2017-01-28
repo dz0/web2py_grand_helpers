@@ -154,12 +154,16 @@ def testgrand_users():
     
         
     # FIELDS 
+    # fields_4virtual = []  -->> needs_data
 
     db.auth_user.reversed_name =  Field.Virtual('reversed_name', 
                                                 lambda row, ctx=None: row.auth_user.first_name[::-1]
 #                                                 , table_name = "auth_user"  # not really necessary
 
-                                                ); fields_4virtual.extend([db.auth_user.first_name ])
+                                                );
+    # fields_4virtual.extend([db.auth_user.first_name ])
+
+    db.auth_user.reversed_name  .needs_data =  [db.auth_user.first_name ]
 
     fields_4columns=[   
                         db.auth_user.id,
@@ -185,9 +189,10 @@ def testgrand_users():
         represent4export = { 
             # w2ui_colname(db.auth_user.active): lambda value: represent_boolean(value, html=False)
         } 
-        stuff = w2ui_grid(
+        stuff = w2ui_grid_data(
                         search.query,   
                         fields_4columns=fields_4columns, 
+                        # fields_4virtual=fields_4virtual, 
                         represent4export=represent4export, 
                         after_select_before_render=after_select_before_render,
                         data_name=data_name, 
