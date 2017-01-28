@@ -2,6 +2,7 @@
 
 # from gluon import current
 from AnySQLFORM import *
+from pydal.objects import SQLALL, Query
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -331,6 +332,111 @@ class GrandRegister( object ):
 
 
 class GrandTranslator():
-    pass
+    def __init__(self, fields, language_id=None):
+        db = self.db = current.db
+        # self.db_adapter = self.db._adapter
 
 
+        if not language_id and auth.is_logged_in():
+                language_id = auth.user.language_id
+
+        if not language_id:
+            raise RuntimeError("No language defined for translating")
+
+        self.language_id = language_id
+
+        if fields:
+            self.fields = self.db._adapter.expand_all(fields, [])
+            self.try_auto_update_fields = False
+
+        else:
+            # find fields from DB
+
+            self.try_auto_update_fields = True
+            self.get_all_translatable_fields()
+
+    def translation_alias(self, field):
+        """aliased translations table
+        """
+        return self.db.translation_field.with_alias( "T_"+field._tablename+"__"+field.name )
+
+    def translate_field(self, field):
+        if str(field) in map(str, self.fields):
+            t_alias = self.translation_alias( field )
+            if not field in self.used_fields:
+                self.used_fields.append( field )
+            return  t_alias.value.coalesce( field )
+            # return  self.adapter.COALESCE( t_alias.value , field)
+        else:
+            return field
+
+    def generate_left_joins(self):
+        joins = []
+        for field in self.used_fields:
+            t_alias = self.translation_alias(field)
+            joins.append(
+                t_alias.on(
+                    (t_alias.tablename == field._tablename) &
+                     (t_alias.fieldname == field.name) &  # for aliased fields might need different
+                     (t_alias.rid == field._table._id) &
+                     (t_alias.language_id == self.language_id)
+                )
+            )
+        return joins
+
+
+    def translate(self, expression ):
+        """Traverse Expression (or Query) tree and   decorate  fields with Grand Tranlation  idea similar to expand
+        returns new expression with   and left_joins for translations
+
+        """
+        self.used_fields = [ ]
+        # self.new_expression = Expression(db,lambda item:item)
+
+        def traverse_translate( expr, inplace=False):
+            # based on base adapter "expand"
+
+            if expr is None:
+                return None
+
+            if isinstance(expr, Field):
+                return  self.translate_field( expr )
+
+            # prevent translations of in aggregates...
+            #  self.db._adapter.COUNT is sensitive to translation
+            # not sure about CONCAT   SUM of texts ?
+            elif hasattr(expr, 'op') and expr.op is self.db._adapter.AGGREGATE:
+                return expr
+
+            elif isinstance(expr, (Expression, Query)):
+                first =  traverse_translate(  expr.first )
+                second =  traverse_translate( expr.second )
+
+                # if inplace:
+                #     expr.first = first
+                #     expr.second = second
+                #     return
+
+                return expr.__class__( expr.db, expr.op, first, second )
+                # return Expression( expr.db, expr.op, first, second, expr.type )
+                # return Query( expr.db, expr.op, first, second )
+
+            elif isinstance(expr, SQLALL):
+                  expr = expr._table.fields  # might be problems with flattening
+                  return [traverse_translate(e) for e in expr]
+
+            elif isinstance(expr, (list, tuple )):
+                flatten_ALL = []
+                for e in expr:
+                    if isinstance(expr, SQLALL): # expand and flatten
+                        flatten_ALL.extend( expr._table.fields )
+                    else:
+                        flatten_ALL.append(e)
+
+                return [traverse_translate(e) for e in flatten_ALL]
+            else:
+                return expr
+
+        new_expression = traverse_translate( expression )
+
+        return Storage( query=new_expression, having=self.generate_left_joins() )

@@ -33,7 +33,7 @@ if not request.env.web2py_runtime_gae:
              # pool_size=myconf.get('db.pool_size'),
              # migrate_enabled=myconf.get('db.migrate'),
              # check_reserved=['all'])
-    db = DAL('sqlite://storage.sqlite', migrate_enabled=True)
+    db = DAL('sqlite://storage.sqlite', migrate_enabled=True, check_reserved=['sqlite', 'postgres', 'mysql'])
 
 else:
     # ---------------------------------------------------------------------

@@ -5,6 +5,7 @@ from pydal.objects import Field #, Row, Expression
 from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_from_formfields
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
 from plugin_AnySQLFORM.GrandRegister import GrandRegister, DalView
+from plugin_AnySQLFORM.GrandRegister import GrandTranslator
 
 
 # test fields
@@ -176,4 +177,34 @@ def test_grandform_ajax_records(  ):
         return result
 
 
+def populate_fake_translations():
 
+    # field = db.auth_user.first_name
+    # field = db.auth_group.role
+
+    print 'dbg select', db()._select( 'id', field )
+    for r in db().select( 'id', field ):
+        db.translation_field.insert(
+            tablename = field._tablename,
+            fieldname = field.name,
+            rid = r['id'],
+            language_id = 2,
+            value = "EN_"+r[field]
+        )
+
+
+def test_grandtranslations():
+
+
+    gt = GrandTranslator(fields = [db.auth_user.first_name, db.auth_group.role], language_id=2)
+    tests = [
+        db.auth_user.first_name,  # Field
+        db.auth_user.first_name + db.auth_user.last_name, # Expression
+        db.auth_user.first_name.contains('s'),  # Query
+        # Ąlias
+        ]
+
+    def repr_t(t):  return map(str, [t.query]+t.having  )
+
+    results = { expr: repr_t( gt.translate( expr )) for expr in tests }
+    return results

@@ -48,7 +48,7 @@ I00
 sg6
 I4
 sg7
-S'INTEGER REFERENCES auth_user (id) ON DELETE CASCADE'
+S'INTEGER REFERENCES auth_user (id) ON DELETE CASCADE  '
 p17
 sg9
 I00
@@ -104,6 +104,5 @@ p29
 sg9
 I00
 sg10
-S'id'
-p30
+g27
 ss.
