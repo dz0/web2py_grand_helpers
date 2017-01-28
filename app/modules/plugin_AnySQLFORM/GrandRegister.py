@@ -405,7 +405,13 @@ class GrandTranslator():
             # prevent translations of in aggregates...
             #  self.db._adapter.COUNT is sensitive to translation
             # not sure about CONCAT   SUM of texts ?
-            elif hasattr(expr, 'op') and expr.op is self.db._adapter.AGGREGATE:
+            elif hasattr(expr, 'op') and expr.op is self.db._adapter.AGGREGATE :
+                return expr
+
+            #if we already have translation here
+            elif ( hasattr(expr, 'op') and expr.op is self.db._adapter.COALESCE
+            and isinstance( expr.second , Field)
+            and  str(expr.first) == self.translation_alias( expr.second ) + '.value' ):
                 return expr
 
             elif isinstance(expr, (Expression, Query)):
@@ -439,4 +445,4 @@ class GrandTranslator():
 
         new_expression = traverse_translate( expression )
 
-        return Storage( query=new_expression, having=self.generate_left_joins() )
+        return Storage( expr=new_expression, left=self.generate_left_joins() )

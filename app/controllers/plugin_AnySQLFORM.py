@@ -199,12 +199,17 @@ def test_grandtranslations():
     gt = GrandTranslator(fields = [db.auth_user.first_name, db.auth_group.role], language_id=2)
     tests = [
         db.auth_user.first_name,  # Field
-        db.auth_user.first_name + db.auth_user.last_name, # Expression
-        db.auth_user.first_name.contains('s'),  # Query
-        # Ąlias
+        db.auth_user.first_name + db.auth_user.last_name, # Flat Expression
+        db.auth_user.first_name.contains('s'),  # Flat Query
+        # Alias ?
+
+        # structured / hierarchical / complex cases
+        (db.auth_group.role+(db.auth_user.first_name + db.auth_user.last_name)), # complex Expression
+        (db.auth_user.first_name.contains('s') || db.auth_user.first_name=="John") || db.auth_user.last_name=="BLA",  # complex Query
+
         ]
 
-    def repr_t(t):  return map(str, [t.query]+t.having  )
+    def repr_t(t):  return map(str, [t.expr]+t.left  )
 
-    results = { expr: repr_t( gt.translate( expr )) for expr in tests }
-    return results
+    results =  [ {expr: repr_t( gt.translate( expr ))}  for expr in tests]
+    return dict(tests=results)
