@@ -61,22 +61,22 @@ class DalView(Storage):
         if type_=='left':
             if not self.left :
                 self.left = []
-                if self.left_given:
-                    self.left.extend( self.left_given )
                 if self.left_join_chains:
                     for jchain in self.left_join_chains:
                         self.left.extend( build_joins_chain(  *jchain ) )
-            return self.left 
+                if self.left_given:
+                    self.left.extend(self.left_given)
+            return self.left
               
         if type_=='inner':
             if not self.join : 
                 self.join = []
-                if self.join_given:
-                    self.join.extend(self.join_given)
                 if self.inner_join_chains:
                     for jchain in self.inner_join_chains:
                         self.join.extend( build_joins_chain(  jchain ) )
-            return self.join      
+                if self.join_given:
+                    self.join.extend(self.join_given)
+            return self.join
 
 
     def guarantee_table_in_query(self):
