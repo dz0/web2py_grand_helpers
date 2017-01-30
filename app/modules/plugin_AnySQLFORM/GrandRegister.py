@@ -6,6 +6,7 @@ from pydal.objects import SQLALL, Query
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
+from gluon.http import HTTP # for grandregister render()
 
 # from pydal/adapters/base.py
 SELECT_ARGS = (
@@ -32,13 +33,13 @@ class DalView(Storage):
         self.fields = fields
         self.db = current.db
         
-        for key in SELECT_ARGS+('query', 'left_join_chains', 'inner_join_chains'):
+        for key in SELECT_ARGS+('query', 'left_given', 'join_given', 'left_join_chains', 'inner_join_chains'):
             self[key] = kwargs.get(key)
                     
     
         if self.left and self.left_join_chains :
             raise RuntimeError("Overlapping args for left...join_chains, %s" % self.left_join_chains)
-            
+
         if self.join and self.inner_join_chains :
             raise RuntimeError("Overlapping args for inner...join_chains, %s" % self.inner_join_chains)
         
@@ -58,8 +59,10 @@ class DalView(Storage):
         #its a pitty, that there is left and join, but not left and inner properties...
             
         if type_=='left':
-            if not self.left : 
+            if not self.left :
                 self.left = []
+                if self.left_given:
+                    self.left.extend( self.left_given )
                 if self.left_join_chains:
                     for jchain in self.left_join_chains:
                         self.left.extend( build_joins_chain(  *jchain ) )
@@ -68,6 +71,8 @@ class DalView(Storage):
         if type_=='inner':
             if not self.join : 
                 self.join = []
+                if self.join_given:
+                    self.join.extend(self.join_given)
                 if self.inner_join_chains:
                     for jchain in self.inner_join_chains:
                         self.join.extend( build_joins_chain(  jchain ) )
@@ -144,8 +149,6 @@ class GrandRegister( object ):
         self.search_fields_update_triggers = search_fields_update_triggers
 
 
-
-
         self.translate_fields = translate_fields
         self.response_view = response_view
 
@@ -204,18 +207,37 @@ class GrandRegister( object ):
         )
         return context
 
-    def form_register(self):
+    def form(self):
         # cid?
         context = self.w2ui_grid()
         context['form'] =  self.search_form
         return context
+
+    def render(self):
+        request = current.request
+        response = current.response
+
+        if request.vars._grid:
+
+            rows = self.w2ui_grid_records()
+            result = dict(status='success', records=rows)  # TODO: error, etc...
+
+            # response.view = "generic.json"
+            # return json(dict(status='success', records = rows ))
+            # from gluon.serializers import json
+            # raise HTTP( 200,  response.render("generic.json", result) )
+            raise HTTP( 200,  response.json( result ) )
+
+        else:
+            raise HTTP(200, response.render(self.response_view, self.form() ) )
+
 
     # def search_filter(self):
     #     " query and having "
     #     return self.search_form().build_queries()
 
 
-    # # SIMPLE DATA -- ok for w2ui_records
+    # # SIMPLE DATA -- ok for w2ui_grid_records
     # def get_data_with_virtual(self):  # but what about column sequence?
     #     # filter out virtual fields
     #     virtual_fields = []
@@ -234,6 +256,7 @@ class GrandRegister( object ):
     #
     #     return data
 
+
     def get_selection(self):
         """get selection by filter of current request """
         filter = self.search_form.build_queries()
@@ -248,7 +271,7 @@ class GrandRegister( object ):
 
         return self.selection
 
-    def records_w2ui(self):
+    def w2ui_grid_records(self):
 
         # def get_row_field_value(record, colname, columns=None, sqlrows=None):
         #     """finds column value in rows by colname
@@ -361,9 +384,9 @@ class GrandTranslator():
         return self.db.translation_field.with_alias( "T_"+field._tablename+"__"+field.name )
 
     def translate_field(self, field):
-        if str(field) in map(str, self.fields):
+        if str(field) in map(str, self.fields):  # direct check probably uses __eq__ for objects and returns nonsense
             t_alias = self.translation_alias( field )
-            if not field in self.used_fields:
+            if not str(field) in  map(str, self.used_fields):
                 self.used_fields.append( field )
             return  t_alias.value.coalesce( field )
             # return  self.adapter.COALESCE( t_alias.value , field)
@@ -386,10 +409,12 @@ class GrandTranslator():
 
 
     def translate(self, expression ):
-        """Traverse Expression (or Query) tree and   decorate  fields with Grand Tranlation  idea similar to expand
-        returns new expression with   and left_joins for translations
-
+        """Traverse Expression (or Query) tree and   decorate  fields with COALESCE translations
+        returns:
+           new expression
+           left_joins  for translations
         """
+
         self.used_fields = [ ]
         # self.new_expression = Expression(db,lambda item:item)
 
@@ -411,7 +436,7 @@ class GrandTranslator():
             #if we already have translation here
             elif ( hasattr(expr, 'op') and expr.op is self.db._adapter.COALESCE
             and isinstance( expr.second , Field)
-            and  str(expr.first) == self.translation_alias( expr.second ) + '.value' ):
+            and  str(expr.first) == self.translation_alias( expr.second ) + '.value' ):  # TODO: or str(expr.first) ==  'translation_field'
                 return expr
 
             elif isinstance(expr, (Expression, Query)):
