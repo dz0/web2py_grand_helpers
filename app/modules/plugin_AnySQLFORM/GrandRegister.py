@@ -21,8 +21,13 @@ class DalView(Storage):
     """
     
     def kwargs_4select(self):
-        return {key:self[key] for key in SELECT_ARGS if self[key]}
-        
+        kwargs = {key:self[key] for key in SELECT_ARGS if self[key]}
+        if self.translation_left:
+            if kwargs['left']:
+                kwargs['left'].extend( self.translation_left )
+            else:
+                kwargs['left'] = self.translation_left
+        return kwargs
     def __init__(self, *fields, **kwargs):
         """
         important part is join_chains -- array of join_chain (see plugin_joins_builder) 
@@ -32,11 +37,13 @@ class DalView(Storage):
         """
         self.fields = fields
         self.db = current.db
-        
-        for key in SELECT_ARGS+('query', 'left_given', 'join_given', 'left_join_chains', 'inner_join_chains'):
+
+
+        for key in SELECT_ARGS+('query', 'left_given', 'join_given', 'left_join_chains', 'inner_join_chains', 'translator'):
             self[key] = kwargs.get(key)
-                    
-    
+
+        # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
+
         if self.left and self.left_join_chains :
             raise RuntimeError("Overlapping args for left...join_chains, %s" % self.left_join_chains)
 
@@ -80,16 +87,36 @@ class DalView(Storage):
 
 
     def guarantee_table_in_query(self):
-        if self.query == True:
-            main_table = self.fields[0].table
-            self.query = main_table.id > 0
+        if self.query == True: # this means "Everything"
+            for expr in self.fields:
+                if isinstance(expr, Field):
+                    main_table = expr.table
+                    self.query = main_table # main_table.id > 0
+                    return self.query
+                elif self.translator.is_translation(field):
+                    main_table = expr.second.table
+                    self.query = main_table
+                    return self.query
+
+    def translate(self):
+        if self.translator:
+            translated = self.translator.translate( [self.fields, self.query, self.having] )
+            # tfields, tquery, thaving = translated.expr
+            self.fields, self.query, self.having = translated.expr
+            self.translation_left = translated.left  # they should be given at the end of all left
+        # else:
+        #     self.translation_left = []
+
+
 
     def get_sql(self):
         self.guarantee_table_in_query()
+        self.translate()
         return self.db(self.query)._select( *self.fields, **self.kwargs_4select() )
         
     def execute(self): # usuall select
         self.guarantee_table_in_query()
+        self.translate()
         return self.db(self.query).select( *self.fields, **self.kwargs_4select() )
         
     def get_grid_kwargs(self):
@@ -150,6 +177,7 @@ class GrandRegister( object ):
 
 
         self.translate_fields = translate_fields
+
         self.response_view = response_view
 
         self.kwargs = kwargs
@@ -407,6 +435,12 @@ class GrandTranslator():
             )
         return joins
 
+    def is_translation(self, expr):
+        return (
+              hasattr(expr, 'op') and expr.op is expr.db._adapter.COALESCE
+              and isinstance(expr.second, Field)
+              and str(expr.first) in [self.translation_alias(expr.second) + '.value', 'translation_field.value']
+            )
 
     def translate(self, expression ):
         """Traverse Expression (or Query) tree and   decorate  fields with COALESCE translations
@@ -418,7 +452,8 @@ class GrandTranslator():
         self.used_fields = [ ]
         # self.new_expression = Expression(db,lambda item:item)
 
-        def traverse_translate( expr, inplace=False):
+        # maybe use ideas from https://gist.github.com/Xjs/114831
+        def _traverse_translate( expr, inplace=False):
             # based on base adapter "expand"
 
             if expr is None:
@@ -434,14 +469,12 @@ class GrandTranslator():
                 return expr
 
             #if we already have translation here
-            elif ( hasattr(expr, 'op') and expr.op is self.db._adapter.COALESCE
-            and isinstance( expr.second , Field)
-            and  str(expr.first) == self.translation_alias( expr.second ) + '.value' ):  # TODO: or str(expr.first) ==  'translation_field'
+            elif self.is_translation(expr):
                 return expr
 
             elif isinstance(expr, (Expression, Query)):
-                first =  traverse_translate(  expr.first )
-                second =  traverse_translate( expr.second )
+                first =  _traverse_translate(  expr.first )
+                second =  _traverse_translate( expr.second )
 
                 # if inplace:
                 #     expr.first = first
@@ -454,7 +487,7 @@ class GrandTranslator():
 
             elif isinstance(expr, SQLALL):
                   expr = expr._table.fields  # might be problems with flattening
-                  return [traverse_translate(e) for e in expr]
+                  return [_traverse_translate(e) for e in expr]
 
             elif isinstance(expr, (list, tuple )):
                 flatten_ALL = []
@@ -464,10 +497,11 @@ class GrandTranslator():
                     else:
                         flatten_ALL.append(e)
 
-                return [traverse_translate(e) for e in flatten_ALL]
+                return [_traverse_translate(e) for e in flatten_ALL]
             else:
                 return expr
 
-        new_expression = traverse_translate( expression )
+        new_expression = _traverse_translate( expression )
+        self.result = Storage( expr=new_expression, left=self.generate_left_joins() )
 
-        return Storage( expr=new_expression, left=self.generate_left_joins() )
+        return self.result

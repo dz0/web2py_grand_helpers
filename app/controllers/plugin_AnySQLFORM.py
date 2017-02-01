@@ -223,6 +223,8 @@ def test_grandtranslator_expressions():
         (db.auth_group.role+(db.auth_user.first_name + db.auth_user.last_name)), # complex Expression
         (db.auth_user.first_name.contains('s') | (db.auth_user.first_name=="John") ) & (db.auth_user.last_name=="BLA"),  # complex Query
 
+        # list of expressions (any level depth/structure)
+        tuple( [ ('list',  db.auth_group.role), db.auth_user.first_name.contains(['s', 'd']), ])
         ]
 
     def repr_t(t):  return map(str, [t.expr]+t.left  )
@@ -256,12 +258,6 @@ def test_grandtranslator_dalview_search():
 
     fields = test_fields()[:4]
 
-
-    gt = GrandTranslator(
-        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
-        language_id=2
-    )
-
     form = QuerySQLFORM(*fields)     # TODO decorate with translations: IS_IN_DB values..
 
     # form.check_duplicate_fields_by_attrs('target_expression')
@@ -271,37 +267,25 @@ def test_grandtranslator_dalview_search():
     cols = get_expressions_from_formfields(fields)
     print "dbg cols", cols
 
+    # translations
+    gt = GrandTranslator(
+        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
+        language_id=2
+    )
+
+    # translated = gt.translate( [fields, filter.query, filter.having] )
+    # tfields, tquery, thaving = translated.expr
+    # tleft = translated.left
+    #
+    # if tquery == True:
+    #     tquery = fields[0].table
 
 
-    tleft = []
-    def extend_with_not_contained(A, B):
-        for b in B:
-            if not str(b) in map(str, A):
-                A.append( b )
-
-    def translate(expressions):
-        texpressions = []
-        for expr in expressions:
-            translated = gt.translate(expr)
-            texpressions.append(translated.expr)
-            # tleft.extend(translated.left)
-            extend_with_not_contained(tleft, translated.left)
-        return texpressions
-
-    def guarantee_table_in_query():
-        if filter.query == True:
-            main_table = fields[0].table
-            filter.query = main_table
-            # filter.query = main_table.id > 0
-
-    guarantee_table_in_query() # because after tranlation fields[0].table would be problem...
-    tfields = translate(fields)
-    tquery  = translate([filter.query])[0]
-    thaving = translate([filter.having])[0]
-
-    selection = DalView(*tfields, query=tquery, having=thaving,
-                        left_given = tleft,
-                        left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]]
+    # selection = DalView(*tfields, query=tquery, having=thaving, left_given = tleft,
+    selection = DalView(*fields, query=filter.query, having=filter.having, left_given = (),
+                        distinct = True,
+                        left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]],
+                        translator = gt
                         )
 
     sql = selection.get_sql()
@@ -320,28 +304,19 @@ def test_grandtranslator_dalview_search():
         # vars_dict=repr(form.vars),
     )
 
-    """ PROBLEM -- doesn't select untranslated roles
-
-    if we find fragment in translation_field, but join_chain is based on original_talbe , somthing is missing...
-
-
-SELECT COALESCE(T_auth_user__first_name.value,auth_user.first_name),
-auth_user.email, auth_user.id, COALESCE(T_auth_group__role.value,auth_group.role)
-
-FROM auth_user
-
-LEFT JOIN translation_field AS T_auth_user__first_name
-ON ((((T_auth_user__first_name.tablename = 'auth_user') AND (T_auth_user__first_name.fieldname = 'first_name'))
-AND (T_auth_user__first_name.rid = auth_user.id)) AND (T_auth_user__first_name.language_id = 2))
-
- LEFT JOIN translation_field AS T_auth_group__role
- ON ((((T_auth_group__role.tablename = 'auth_group') AND (T_auth_group__role.fieldname = 'role'))
-  AND (T_auth_group__role.rid = auth_group.id)) AND (T_auth_group__role.language_id = 2))
-
+    """ SELECT DISTINCT COALESCE(T_auth_user__first_name.value,auth_user.first_name),
+auth_user.email, auth_user.id, COALESCE(T_auth_group__role.value,auth_group.role) FROM auth_user
 LEFT JOIN auth_membership ON (auth_membership.user_id = auth_user.id)
 LEFT JOIN auth_group ON (auth_group.id = auth_membership.group_id)
 LEFT JOIN auth_permission ON (auth_permission.group_id = auth_group.id)
 
-WHERE (auth_user.id IS NOT NULL);
+LEFT JOIN translation_field AS T_auth_user__first_name
+ON ((((T_auth_user__first_name.tablename = 'auth_user') AND (T_auth_user__first_name.fieldname = 'first_name'))
+ AND (T_auth_user__first_name.rid = auth_user.id)) AND (T_auth_user__first_name.language_id = 2))
+
+LEFT JOIN translation_field AS T_auth_group__role ON ((((T_auth_group__role.tablename = 'auth_group') AND (T_auth_group__role.fieldname = 'role')) AND (T_auth_group__role.rid = auth_group.id)) AND (T_auth_group__role.language_id = 2))
+
+WHERE (auth_user.id IS NOT NULL);")
+
 
     """
