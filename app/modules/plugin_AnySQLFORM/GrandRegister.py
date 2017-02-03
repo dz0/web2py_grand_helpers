@@ -14,20 +14,35 @@ SELECT_ARGS = (
      'having', 'join', 'for_update', 'processor', 'cacheable',
      'orderby_on_limitby'
      )
-     
+
+
+def extend_with_unique(A, B):
+    for b in B:
+        if  str(b) not in map(str, A):
+            A.append(b)
+
 class DalView(Storage):
     """similar as DB set, but "packs" query into kwargs 
     and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
     """
-    
+
+
+
     def kwargs_4select(self):
         kwargs = {key:self[key] for key in SELECT_ARGS if self[key]}
-        if self.translation_left:
-            if kwargs['left']:
-                kwargs['left'].extend( self.translation_left )
+
+        if self._translation:   # inject translated stuff
+            if 'left' in kwargs and kwargs[ 'left' ]:
+                kwargs[ 'left' ] = kwargs['left'][:] # clone
+                extend_with_unique( kwargs['left'], self._translation[ 'left' ])
+                # kwargs[ 'left' ] =  kwargs[ 'left' ] + self._translation[ 'left' ]
             else:
-                kwargs['left'] = self.translation_left
+                kwargs[ 'left' ] =  self._translation[ 'left' ]
+
+            kwargs['having'] = self._translation[ 'having' ]
+
         return kwargs
+
     def __init__(self, *fields, **kwargs):
         """
         important part is join_chains -- array of join_chain (see plugin_joins_builder) 
@@ -102,22 +117,29 @@ class DalView(Storage):
         if self.translator:
             translated = self.translator.translate( [self.fields, self.query, self.having] )
             # tfields, tquery, thaving = translated.expr
-            self.fields, self.query, self.having = translated.expr
-            self.translation_left = translated.left  # they should be given at the end of all left
+            t = self._translation  = Storage()
+            t.fields, t.query, t.having = translated.expr
+            t.left = translated.left  # they should be given at the end of all left
+            return t
         # else:
         #     self.translation_left = []
 
 
 
-    def get_sql(self):
+    def get_sql(self, try_translate=True):
         self.guarantee_table_in_query()
-        self.translate()
-        return self.db(self.query)._select( *self.fields, **self.kwargs_4select() )
+        if try_translate and self.translate():
+            return self.db(self._translation.query)._select( *self._translation.fields, **self.kwargs_4select() )
+        else:
+            return self.db(self.query)._select(*self.fields, **self.kwargs_4select())
         
-    def execute(self): # usuall select
+    def execute(self, try_translate=True): # usuall select
         self.guarantee_table_in_query()
-        self.translate()
-        return self.db(self.query).select( *self.fields, **self.kwargs_4select() )
+        if try_translate and self.translate():
+            print "DBG Translated sql 2:  ", self.db(self.query)._select(*self.fields, **self.kwargs_4select())
+            return self.db(self._translation.query).select( *self._translation.fields, **self.kwargs_4select() )
+        else:
+            return self.db(self.query).select(*self.fields, **self.kwargs_4select())
         
     def get_grid_kwargs(self):
         return "TODO"

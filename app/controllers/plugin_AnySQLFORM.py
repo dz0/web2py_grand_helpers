@@ -9,6 +9,9 @@ from plugin_AnySQLFORM.GrandRegister import GrandTranslator
 
 
 # test fields
+from applications.app.modules.plugin_joins_builder.joins_builder import build_joins_chain
+
+
 def test_fields():
     orphan_with_target = Field('orphan_name')
     orphan_with_target.target_expression = db.auth_user.last_name + "bla"
@@ -235,22 +238,31 @@ def test_grandtranslator_expressions():
 def test_grandtranslator_dalview():
 
     expr = db.auth_user.first_name + db.auth_user.last_name
-    left = []
 
     gt = GrandTranslator(
         fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
         language_id=2
     )
-    translated = gt.translate(expr)
-    expr = translated.expr
-    left.extend( translated.left )
+
+    # left = []
+    # we could translate stuff externally:
+    # translated = gt.translate(expr)
+    # expr = translated.expr
+    # left.extend( translated.left )
+
 
     selection = DalView( expr ,  query=db.auth_user,
-                  left = left
+                         left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group]],
+                         # left = build_joins_chain(db.auth_user, db.auth_membership, db.auth_group),
+                         translator = gt
                   )
 
+    sql = selection.get_sql(try_translate=False)
+    sql_translated = selection.get_sql()
+
     return dict(
-        sql = selection.get_sql(),
+        sql=PRE(  sql  .replace("LEFT", "\nLEFT")),
+        sql_translated=PRE(sql_translated  .replace("LEFT", "\nLEFT").replace("COALESCE", "\nCOALESCE")),
         data = selection.execute()
     )
 
@@ -288,14 +300,18 @@ def test_grandtranslator_dalview_search():
                         translator = gt
                         )
 
-    sql = selection.get_sql()
-    print("DBG SQL: ", sql)
+
+    sql = selection.get_sql(try_translate=False)
+    sql_translated = selection.get_sql()
+
+    print("DBG SQL: ", sql_translated)
 
     # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
     data = selection.execute()
 
     return dict(
-        sql=sql,
+        sql=PRE(sql.replace("LEFT", "\nLEFT")),
+        sql_translated=PRE(sql_translated.replace("LEFT", "\nLEFT").replace("COALESCE", "\nCOALESCE")),
         filter=filter,  # query and having
         form=form,
         # query_data = repr(query_data),
@@ -305,7 +321,9 @@ def test_grandtranslator_dalview_search():
     )
 
     """ SELECT DISTINCT COALESCE(T_auth_user__first_name.value,auth_user.first_name),
-auth_user.email, auth_user.id, COALESCE(T_auth_group__role.value,auth_group.role) FROM auth_user
+auth_user.email, auth_user.id, COALESCE(T_auth_group__role.value,auth_group.role)
+
+FROM auth_user
 LEFT JOIN auth_membership ON (auth_membership.user_id = auth_user.id)
 LEFT JOIN auth_group ON (auth_group.id = auth_membership.group_id)
 LEFT JOIN auth_permission ON (auth_permission.group_id = auth_group.id)
@@ -316,7 +334,8 @@ ON ((((T_auth_user__first_name.tablename = 'auth_user') AND (T_auth_user__first_
 
 LEFT JOIN translation_field AS T_auth_group__role ON ((((T_auth_group__role.tablename = 'auth_group') AND (T_auth_group__role.fieldname = 'role')) AND (T_auth_group__role.rid = auth_group.id)) AND (T_auth_group__role.language_id = 2))
 
-WHERE (auth_user.id IS NOT NULL);")
+WHERE (auth_user.id IS NOT NULL);
+
 
 
     """
