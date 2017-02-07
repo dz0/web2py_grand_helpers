@@ -257,7 +257,7 @@ def test_grandtranslator_dalview():
                          translator = gt
                   )
 
-    sql = selection.get_sql(try_translate=False)
+    sql = selection.get_sql(translate=False)
     sql_translated = selection.get_sql()
 
     return dict(
@@ -301,7 +301,7 @@ def test_grandtranslator_dalview_search():
                         )
 
 
-    sql = selection.get_sql(try_translate=False)
+    sql = selection.get_sql(translate=False)
     sql_translated = selection.get_sql()
 
     print("DBG SQL: ", sql_translated)
@@ -320,22 +320,4 @@ def test_grandtranslator_dalview_search():
         # vars_dict=repr(form.vars),
     )
 
-    """ SELECT DISTINCT COALESCE(T_auth_user__first_name.value,auth_user.first_name),
-auth_user.email, auth_user.id, COALESCE(T_auth_group__role.value,auth_group.role)
-
-FROM auth_user
-LEFT JOIN auth_membership ON (auth_membership.user_id = auth_user.id)
-LEFT JOIN auth_group ON (auth_group.id = auth_membership.group_id)
-LEFT JOIN auth_permission ON (auth_permission.group_id = auth_group.id)
-
-LEFT JOIN translation_field AS T_auth_user__first_name
-ON ((((T_auth_user__first_name.tablename = 'auth_user') AND (T_auth_user__first_name.fieldname = 'first_name'))
- AND (T_auth_user__first_name.rid = auth_user.id)) AND (T_auth_user__first_name.language_id = 2))
-
-LEFT JOIN translation_field AS T_auth_group__role ON ((((T_auth_group__role.tablename = 'auth_group') AND (T_auth_group__role.fieldname = 'role')) AND (T_auth_group__role.rid = auth_group.id)) AND (T_auth_group__role.language_id = 2))
-
-WHERE (auth_user.id IS NOT NULL);
-
-
-
-    """
+    """    """

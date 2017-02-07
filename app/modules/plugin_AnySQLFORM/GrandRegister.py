@@ -8,6 +8,39 @@ from pydal.objects import SQLALL, Query
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
 from gluon.http import HTTP # for grandregister render()
 
+def rename_row_fields( map, row ):
+    """
+    renames and REGROUPS columns (non compact mode)
+    >>> r = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10})
+    >>> # map = {'auth_user.first_name': 'auth.username',  '_extra.count over(*)':'auth.count' }
+    >>> #map = {db.auth_user.first_name: 'auth.username',  '_extra.count over(*)':'auth.count' }
+    >>> newr = rename_row_fields( map, r )
+
+    newr = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10}))
+
+    TODO: could use Adapter .parse(...) ??
+    """
+
+    db = current.db
+    def parse_name(name):
+        if '.' in name:
+            table, field = name.split('.', 1)
+            if table in db.tables:
+                return table, field
+        return '_extra', name
+
+    # result = defaultdict(dict)
+    result = defaultdict(Row)
+    for a, b in map.items():
+
+        atable, afield = parse_name(a)
+        btable, bfield = parse_name(b)
+        # print 'dbg', btable , bfield , '=',  atable , afield
+
+        result[btable][bfield] = row[atable][afield]
+    return Row( result )
+
+
 # from pydal/adapters/base.py
 SELECT_ARGS = (
      'orderby', 'groupby', 'limitby', 'required', 'cache', 'left', 'distinct',
@@ -17,6 +50,7 @@ SELECT_ARGS = (
 
 
 def extend_with_unique(A, B):
+    """extends list A with distinct items from B, which were not present in A"""
     for b in B:
         if  str(b) not in map(str, A):
             A.append(b)
@@ -28,18 +62,18 @@ class DalView(Storage):
 
 
 
-    def kwargs_4select(self):
+    def kwargs_4select(self, translation=None):
         kwargs = {key:self[key] for key in SELECT_ARGS if self[key]}
 
-        if self._translation:   # inject translated stuff
+        if translation:   # inject translated stuff
             if 'left' in kwargs and kwargs[ 'left' ]:
                 kwargs[ 'left' ] = kwargs['left'][:] # clone
-                extend_with_unique( kwargs['left'], self._translation[ 'left' ])
+                extend_with_unique( kwargs['left'], translation[ 'left' ])
                 # kwargs[ 'left' ] =  kwargs[ 'left' ] + self._translation[ 'left' ]
             else:
-                kwargs[ 'left' ] =  self._translation[ 'left' ]
+                kwargs[ 'left' ] =  translation[ 'left' ]
 
-            kwargs['having'] = self._translation[ 'having' ]
+            kwargs['having'] = translation[ 'having' ]
 
         return kwargs
 
@@ -115,29 +149,37 @@ class DalView(Storage):
 
     def translate(self):
         if self.translator:
+            # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
             translated = self.translator.translate( [self.fields, self.query, self.having] )
             # tfields, tquery, thaving = translated.expr
-            t = self._translation  = Storage()
+            t = Storage()  # full translation info
             t.fields, t.query, t.having = translated.expr
             t.left = translated.left  # they should be given at the end of all left
             return t
-        # else:
-        #     self.translation_left = []
 
 
 
-    def get_sql(self, try_translate=True):
+    def get_sql(self, translate=True):
         self.guarantee_table_in_query()
-        if try_translate and self.translate():
-            return self.db(self._translation.query)._select( *self._translation.fields, **self.kwargs_4select() )
+        t = self.translate()
+        if translate and t:
+            return self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
         else:
             return self.db(self.query)._select(*self.fields, **self.kwargs_4select())
         
-    def execute(self, try_translate=True): # usuall select
+    def execute(self, translate='transparent' or True or False ): # usuall select
         self.guarantee_table_in_query()
-        if try_translate and self.translate():
-            print "DBG Translated sql 2:  ", self.db(self.query)._select(*self.fields, **self.kwargs_4select())
-            return self.db(self._translation.query).select( *self._translation.fields, **self.kwargs_4select() )
+        t = self.translate()
+        if translate and t:
+            # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
+            trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
+
+            if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
+                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) } # todo: maybe use trows.parse
+                records = [ rename_row_fields( map_2original_names , row) for row in trows ]
+                trows.records = records
+                trows.colnames = [ map_2original_names [ tcol ] for tcol in trows.colnames]
+            return trows
         else:
             return self.db(self.query).select(*self.fields, **self.kwargs_4select())
         
