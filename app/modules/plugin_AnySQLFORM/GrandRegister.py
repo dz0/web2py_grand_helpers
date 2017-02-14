@@ -8,13 +8,13 @@ from pydal.objects import SQLALL, Query
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
 from gluon.http import HTTP # for grandregister render()
 
-def rename_row_fields( map, row ):
+def rename_row_fields(names_map, row, compact=False):
     """
     renames and REGROUPS columns (non compact mode)
     >>> r = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10})
-    >>> # map = {'auth_user.first_name': 'auth.username',  '_extra.count over(*)':'auth.count' }
-    >>> #map = {db.auth_user.first_name: 'auth.username',  '_extra.count over(*)':'auth.count' }
-    >>> newr = rename_row_fields( map, r )
+    >>> # names_map = {'auth_user.first_name': 'auth.username',  '_extra.count over(*)':'auth.count' }
+    >>> #names_map = {db.auth_user.first_name: 'auth.username',  '_extra.count over(*)':'auth.count' }
+    >>> newr = rename_row_fields( names_map, r )
 
     newr = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10}))
 
@@ -31,13 +31,21 @@ def rename_row_fields( map, row ):
 
     # result = defaultdict(dict)
     result = defaultdict(Row)
-    for a, b in map.items():
+
+    key_fieldnames = [ parse_name(fullname)[1] for fullname in  names_map.keys() ]
+
+    for a, b in names_map.items():
 
         atable, afield = parse_name(a)
         btable, bfield = parse_name(b)
         # print 'dbg', btable , bfield , '=',  atable , afield
+        if compact:
+            if key_fieldnames.count(bfield) > 1: # if two/more same names
+                raise KeyError( "duplicate field name :/ %s" % bfield)
+            result[bfield] = row[afield]
+        else:
+            result[btable][bfield] = row[atable][afield]
 
-        result[btable][bfield] = row[atable][afield]
     return Row( result )
 
 
@@ -173,17 +181,19 @@ class DalView(Storage):
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
-
+            trows.compact = False
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
                 map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) } # todo: maybe use trows.parse
-                records = [ rename_row_fields( map_2original_names , row) for row in trows ]
+                records = [ rename_row_fields( map_2original_names , row, compact=trows.compact) for row in trows ]
                 trows.records = records
                 trows.colnames = [ map_2original_names [ tcol ] for tcol in trows.colnames]
             return trows
         else:
-            return self.db(self.query).select(*self.fields, **self.kwargs_4select())
-        
-    def get_grid_kwargs(self):
+            rows = self.db(self.query).select(*self.fields, **self.kwargs_4select())
+            rows.compact = False
+            return rows
+
+def get_grid_kwargs(self):
         return "TODO"
         
     # def __call__(self):
@@ -449,6 +459,7 @@ class GrandRegister( object ):
 class GrandTranslator():
     def __init__(self, fields, language_id=None):
         db = self.db = current.db
+
         # self.db_adapter = self.db._adapter
 
 
@@ -462,13 +473,27 @@ class GrandTranslator():
 
         if fields:
             self.fields = self.db._adapter.expand_all(fields, [])
-            self.try_auto_update_fields = False
+            #self.try_auto_update_fields = False
 
         else:
-            # find fields from DB
+            # find fields from DB -- and possibly store in session
+            session = current.session
 
-            self.try_auto_update_fields = True
-            self.get_all_translatable_fields()
+            # make a singleton per session
+            if not session.translatable_fields:
+                rows = db().select( db.translation_field.tablename , db.translation_field.fieldname  , distinct=True )
+
+                session.translatable_fields = []
+
+                for r in rows:
+                    try:
+                        session.translatable_fields.append( db[ r.tablename ][ r.fieldname ] )
+                    except Exception as e:
+                        raise RuntimeWarning( ("Translation warning: %(tablename).%(fieldname) not found in db.\n"  % r ) + str(e) )
+
+            self.fields = session.translatable_fields
+            # self.try_auto_update_fields = True
+            #self.get_all_translatable_fields()
 
     def translation_alias(self, field):
         """aliased translations table
