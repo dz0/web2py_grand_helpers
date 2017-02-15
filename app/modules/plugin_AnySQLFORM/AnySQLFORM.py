@@ -18,12 +18,16 @@ DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
 ################## module ##################
 
-def find_out_attr(attr, data_sources):
+def find_out_attr(attr, data_sources, defaultsNone=False):
     for data in data_sources:
         # dict obj
         if isinstance(data, dict)  and  attr in data:   return data[attr]
         # or object property
-        elif hasattr( data, attr ): return getattr(data, attr) 
+        elif hasattr( data, attr ): return getattr(data, attr)
+
+    if defaultsNone:
+        return None
+
     raise KeyError( "%s not found in data_sources %s" % (data, data_sources))
     
 
@@ -115,8 +119,7 @@ class FormField( Field ):
         if isinstance(field, Field):   # if not bare Expression, assign some tablename
             if not hasattr(field, 'tablename'):
                 field.tablename = field._tablename  = 'no_table'
-            self.tablename = self._tablename = field.tablename    
-
+            self.tablename = self._tablename = field.tablename
 
 
         # in rare cases    
@@ -165,6 +168,11 @@ class FormField( Field ):
         if hasattr(self, 'type'):
             # f =  self.target_expression
 
+            # def default_IS_IN_DB(*args, **kwargs ):
+            #     return IS_EMPTY_OR(IS_IN_DB(*args, **kwargs))
+            #
+            # default_IS_IN_DB = kwargs.get('default_requires', default_IS_IN_DB)
+
             # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
             if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field
 
@@ -172,14 +180,19 @@ class FormField( Field ):
                 if self.type.startswith('reference ') or self.type.startswith('list:reference '):
                     foreign_table = self.type.split()[1]
                     # self.target_expression = db[foreign_table]._id  # probably better no, as looses info
-                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, db[foreign_table], db[foreign_table]._format ) )
+                    if not self.requires or self.requires == DEFAULT:
+                        self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format))
+                        self.use_default_IS_IN_DB = True
 
 
+            # TODO: after changing type to reference -- apply logic from previoius paragraph
             if self.type == 'id':  # override, as otherwise field is not shown in form
-                self.type = 'integer'
+                self.type = 'reference %s' % self.tablename
                 self.table = db[self.tablename]
-                self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
-         
+                if not self.requires or self.requires == DEFAULT:
+                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
+                    self.use_default_IS_IN_DB = True
+
 
     
     def construct_new_name(self, field, kwargs ):
@@ -249,10 +262,10 @@ class AnySQLFORM( object  ):
     """Works as proxy """
     def __init__(self, *fields,  **kwargs ):  #
         # SQLFORM.__init__(self, *fields, **kwargs )
-    
+
+        ####### prepair fields #############
+
         field_decorator = kwargs.pop('field_decorator', FormField)
-
-
 
         self.formfields = []
         self.structured_fields = traverse_fields( fields, self.formfields, field_decorator  )
@@ -264,20 +277,47 @@ class AnySQLFORM( object  ):
         except RuntimeError as e:
             raise RuntimeError("Form fields shouldn't have same names. \n %s" % e)
 
+        self.default_IS_IN_DB = kwargs.pop('default_IS_IN_DB', None)
+        for f in self.formfields:
+            self.set_default_validator(f)
+
+        ######### generate form #############
+
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
         form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
 
         kwargs.setdefault('formstyle', 'table2cols')
 
+
         self.__form = form_factory ( *self.structured_fields, table_name=self.table_name, **kwargs )
         # print "dbg form", self.__form
         
         self.db = current.db
 
+    def set_default_validator(self, f):
+        """to be overriden -- example in translations..."""
+
+        db = current.db  # todo: for Reactive form should be prefiltered dbset
+        target = f.target_expression  # for brevity
+
+        # if not f.requires or f.requires == DEFAULT:
+
+        if getattr(f, 'use_default_IS_IN_DB', None) and self.default_IS_IN_DB :  # for reference or ex-id type fields
+            # if f.type.startswith('reference ') or f.type.startswith('list:reference '):
+            foreign_table = f.type.split()[1]
+            f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
+
+        if f.type in ('string', 'text') and f.comparison == 'equals':
+            if isinstance(target, Field) and self.default_IS_IN_DB :
+                f.requires = self.default_IS_IN_DB(db, target.table, "%%(%s)s" % target.name)
+
+            elif type(target) is Expression:
+                table = target._table
+                theset = db(table).select(target).column(target)
+                f.requires = IS_IN_SET(theset)
 
 
-    
     def __getattr__( self, name ):
         # try:
         #     object.__getattribute__(self, name)
@@ -401,11 +441,14 @@ class SearchField( FormField ):
     def __init__(self, field, **kwargs):
         """ field is of type Field or Expression
         Expects params: 
+           comparison
+           name_extension
+
            query_function
            target_is_aggregate
         """
         
-        FormField.__init__(self, field, **kwargs ) 
+        FormField.__init__(self, field, **kwargs )  # overrides "construct_new_name" and inits 'comparison', 'name_extension'
         
         # self.query_function = kwargs.pop('query_function', None)  # should be get from super __init__
         
@@ -424,14 +467,14 @@ class SearchField( FormField ):
             if key in kwargs:
                 val = kwargs[key]
             else:
-                val  = getattr(self, key, None) # maybe we already had property (in some way)
+                val  = getattr(self, key, None) # maybe we already had property (in field) # TODO: was  getattr(self, key, None)
             setattr(self, key, val)
 
     def init_comparison_and_name_extension(self, field, kwargs):
         # comparison
         if not hasattr(self, 'comparison'):
-            self.comparison = kwargs.pop( 'comparison',  None )
-        
+            self.comparison = find_out_attr('comparison', [ kwargs, field], defaultsNone=True)
+
         if not self.comparison:
             self.comparison = '='
 #            if not isinstance( self.target_expression, str):

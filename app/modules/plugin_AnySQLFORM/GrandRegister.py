@@ -175,22 +175,23 @@ class DalView(Storage):
         else:
             return self.db(self.query)._select(*self.fields, **self.kwargs_4select())
         
-    def execute(self, translate='transparent' or True or False ): # usuall select
+    def execute(self, translate='transparent' or True or False, compact=False ): # usuall select
         self.guarantee_table_in_query()
         t = self.translate()
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
+            print "DBG Translated sql 2:", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
-            trows.compact = False
+            trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
                 map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) } # todo: maybe use trows.parse
-                records = [ rename_row_fields( map_2original_names , row, compact=trows.compact) for row in trows ]
+                records = [ rename_row_fields( map_2original_names , row, compact) for row in trows ]
                 trows.records = records
                 trows.colnames = [ map_2original_names [ tcol ] for tcol in trows.colnames]
             return trows
         else:
             rows = self.db(self.query).select(*self.fields, **self.kwargs_4select())
-            rows.compact = False
+            rows.compact = compact
             return rows
 
 def get_grid_kwargs(self):

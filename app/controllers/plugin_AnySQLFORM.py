@@ -38,7 +38,7 @@ def test_fields():
 #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
         orphan_with_target,
         # expression (as target)
-        FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name'),
+        FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equals'),
         FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
     ]
     
@@ -267,9 +267,13 @@ def test_grandtranslator_dalview():
     )
 
 from gluon.validators import IS_IN_DB
+from pydal.objects import Field, FieldVirtual, FieldMethod
+
+
 class T_IS_IN_DB(IS_IN_DB):
-    def __init__( self, translator, dbset, field, **kwargs):
-        super(self, T_IS_IN_DB).__init__ (self, dbset, field, **kwargs)
+    def __init__( self, translator, dbset, field, *args, **kwargs):
+        # super(self, T_IS_IN_DB).__init__ (self, dbset, field, **kwargs)
+        IS_IN_DB.__init__ (self, dbset, field, *args, **kwargs)
         self.translator = translator
 
     #override
@@ -290,8 +294,10 @@ class T_IS_IN_DB(IS_IN_DB):
                       distinct=distinct, cache=self.cache,
                       cacheable=True, left=left)
             # records = self.dbset(table).select(*fields, **dd)
-            records = DalView( *fields, translator=self.translator, query=self.dbset(table), **dd).execute()
+            records = DalView( *fields, translator=self.translator, query=self.dbset(table).query, **dd).execute(compact=False)
 
+        records.compact = True # todo: somehow make it more fluent to work - execute should probably get the same compact=... ?
+        # self.theset = [str(r[self.kfield]) for r in records]
         self.theset = [str(r[self.kfield]) for r in records]
         if isinstance(self.label, str):
             self.labels = [self.label % r for r in records]
@@ -301,7 +307,12 @@ class T_IS_IN_DB(IS_IN_DB):
 
 def test_grandtranslator_dalview_search():
 
-    fields = test_fields()[:4]
+    fields = test_fields()
+
+    column_fields= fields[:4]   # include expression
+
+    fields[-2].comparison = 'equals' # # We will test Expression with IS_IN_SET widget
+    search_fields= [ fields[-2] ] + column_fields
 
     # translations
     gt = GrandTranslator(
@@ -309,15 +320,10 @@ def test_grandtranslator_dalview_search():
         language_id=2
     )
 
-    # auth_user use translated first_name
-    # fields[0].requires = IS_IN_DB(db, db.auth_user.first_name)
-    fields[0].requires = IS_IN_SET(  DalView( fields[0] , translator = gt ).execute().column( fields[0] )     )
+    # inject grand translation feature into AnySQLFORM
+    def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB( gt,  *args, **kwargs)
 
-    # translate stuff for FK represent (auth_user.id)
-    rows = DalView( fields[2]._table._id, fields[2] , translator = gt ).execute()
-    fields[2].requires = IS_IN_SET(  DalView( fields[2] , translator = gt ).execute()     )
-
-    form = QuerySQLFORM(*fields)     # TODO decorate with translations: IS_IN_DB values..
+    form = QuerySQLFORM(*search_fields, default_IS_IN_DB=default_IS_IN_DB)     # TODO decorate with translations: IS_IN_DB values..
 
     # form.check_duplicate_fields_by_attrs('target_expression')
     filter = form.build_queries()
@@ -325,7 +331,7 @@ def test_grandtranslator_dalview_search():
 
 
     # selection = DalView(*tfields, query=tquery, having=thaving, left_given = tleft,
-    selection = DalView(*fields, query = filter.query, having = filter.having, left_given = (),
+    selection = DalView(*column_fields, query = filter.query, having = filter.having, left_given = (),
                         distinct = True,
                         left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]],
                         translator = gt
