@@ -311,14 +311,21 @@ def test_grandtranslator_dalview_search():
 
     column_fields= fields[:4]   # include expression
 
-    fields[-2].comparison = 'equals' # # We will test Expression with IS_IN_SET widget
-    search_fields= [ fields[-2] ] + column_fields
+    expr_col = fields[-2]
+    expr_col.comparison = 'equals' # # We will test Expression with IS_IN_SET widget
+    search_fields= [ expr_col ] + column_fields
+
 
     # translations
     gt = GrandTranslator(
         fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
         language_id=2
     )
+
+    target = expr_col.target_expression
+    # theset = db(target._table).select(target).column(target)
+    theset = DalView(target, translator = gt).execute().column(target)
+    expr_col.requires = IS_IN_SET(theset)
 
     # inject grand translation feature into AnySQLFORM
     def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB( gt,  *args, **kwargs)

@@ -267,7 +267,8 @@ class GrandRegister( object ):
         # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
         # kwargs['form_factory'] = self.form_factory
 
-        self.search_form = QuerySQLFORM( *self.search_fields, **kwargs )
+        # self.search_form = QuerySQLFORM( *self.search_fields, **kwargs )
+        self.search_form = GrandSQLFORM( *self.search_fields, **kwargs )
         self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
 
 
@@ -595,3 +596,11 @@ class GrandTranslator():
         self.result = Storage( expr=new_expression, left=self.generate_left_joins() )
 
         return self.result
+
+class GrandSQLFORM(QuerySQLFORM):
+    """adds translator and uses it to generate validators_with_T """
+    pass
+
+    def set_default_validator(self, f):
+        pass
+        QuerySQLFORM.set_default_validator(self, f)

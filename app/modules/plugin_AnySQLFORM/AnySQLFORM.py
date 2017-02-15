@@ -312,10 +312,10 @@ class AnySQLFORM( object  ):
             if isinstance(target, Field) and self.default_IS_IN_DB :
                 f.requires = self.default_IS_IN_DB(db, target.table, "%%(%s)s" % target.name)
 
-            elif type(target) is Expression:
-                table = target._table
-                theset = db(table).select(target).column(target)
-                f.requires = IS_IN_SET(theset)
+            # elif type(target) is Expression:
+            #     table = target._table
+            #     theset = db(table).select(target).column(target)
+            #     f.requires = IS_IN_SET(theset)
 
 
     def __getattr__( self, name ):
