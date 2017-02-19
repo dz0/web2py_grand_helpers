@@ -1,6 +1,6 @@
 *~
 *.bak
 *.pyc
-app/sessions/*
-app/uploads/*
-app/errors/*
+test_app/sessions/*
+test_app/uploads/*
+test_app/errors/*
