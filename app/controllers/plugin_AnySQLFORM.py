@@ -5,7 +5,7 @@ from pydal.objects import Field #, Row, Expression
 from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_from_formfields
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
 from plugin_AnySQLFORM.GrandRegister import GrandRegister, DalView
-from plugin_AnySQLFORM.GrandRegister import GrandTranslator
+from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
 
 
 # test fields
@@ -266,43 +266,6 @@ def test_grandtranslator_dalview():
         data = selection.execute()
     )
 
-from gluon.validators import IS_IN_DB
-from pydal.objects import Field, FieldVirtual, FieldMethod
-
-
-class T_IS_IN_DB(IS_IN_DB):
-    def __init__( self, translator, dbset, field, *args, **kwargs):
-        # super(self, T_IS_IN_DB).__init__ (self, dbset, field, **kwargs)
-        IS_IN_DB.__init__ (self, dbset, field, *args, **kwargs)
-        self.translator = translator
-
-    #override
-    def build_set(self):
-        table = self.dbset.db[self.ktable]
-        if self.fieldnames == '*':
-            fields = [f for f in table]
-        else:
-            fields = [table[k] for k in self.fieldnames]
-        ignore = (FieldVirtual, FieldMethod)
-        fields = filter(lambda f: not isinstance(f, ignore), fields)
-        if self.dbset.db._dbname != 'gae':
-            orderby = self.orderby or reduce(lambda a, b: a | b, fields)
-            groupby = self.groupby
-            distinct = self.distinct
-            left = self.left
-            dd = dict(orderby=orderby, groupby=groupby,
-                      distinct=distinct, cache=self.cache,
-                      cacheable=True, left=left)
-            # records = self.dbset(table).select(*fields, **dd)
-            records = DalView( *fields, translator=self.translator, query=self.dbset(table).query, **dd).execute(compact=False)
-
-        records.compact = True # todo: somehow make it more fluent to work - execute should probably get the same compact=... ?
-        # self.theset = [str(r[self.kfield]) for r in records]
-        self.theset = [str(r[self.kfield]) for r in records]
-        if isinstance(self.label, str):
-            self.labels = [self.label % r for r in records]
-        else:
-            self.labels = [self.label(r) for r in records]
 
 
 def test_grandtranslator_dalview_search():
@@ -322,15 +285,16 @@ def test_grandtranslator_dalview_search():
         language_id=2
     )
 
-    target = expr_col.target_expression
-    # theset = db(target._table).select(target).column(target)
-    theset = DalView(target, translator = gt).execute().column(target)
-    expr_col.requires = IS_IN_SET(theset)
+    # target = expr_col.target_expression
+    # # theset = db(target._table).select(target).column(target)
+    # theset = DalView(target, translator = gt).execute().column(target)
+    # expr_col.requires = IS_IN_SET(theset)
 
     # inject grand translation feature into AnySQLFORM
-    def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB( gt,  *args, **kwargs)
+    # def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB( gt,  *args, **kwargs)
+    # form = QuerySQLFORM(*search_fields, default_IS_IN_DB=default_IS_IN_DB)
 
-    form = QuerySQLFORM(*search_fields, default_IS_IN_DB=default_IS_IN_DB)     # TODO decorate with translations: IS_IN_DB values..
+    form = GrandSQLFORM(*search_fields, translator=gt) # uses translator for validators
 
     # form.check_duplicate_fields_by_attrs('target_expression')
     filter = form.build_queries()

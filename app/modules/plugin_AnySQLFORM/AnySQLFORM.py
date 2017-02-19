@@ -301,6 +301,7 @@ class AnySQLFORM( object  ):
         db = current.db  # todo: for Reactive form should be prefiltered dbset
         target = f.target_expression  # for brevity
 
+        # TODO: move to QuerySQLFORM?
         # if not f.requires or f.requires == DEFAULT:
 
         if getattr(f, 'use_default_IS_IN_DB', None) and self.default_IS_IN_DB :  # for reference or ex-id type fields

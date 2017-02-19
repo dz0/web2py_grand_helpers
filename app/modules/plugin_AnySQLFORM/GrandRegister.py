@@ -597,10 +597,93 @@ class GrandTranslator():
 
         return self.result
 
+
+
+# Validator with translator
+from gluon.validators import IS_IN_DB
+from pydal.objects import Field, FieldVirtual, FieldMethod
+
+class T_IS_IN_DB(IS_IN_DB):
+    def __init__( self, translator, dbset, field, *args, **kwargs):
+        # super(self, T_IS_IN_DB).__init__ (self, dbset, field, **kwargs)
+        IS_IN_DB.__init__ (self, dbset, field, *args, **kwargs)
+        self.translator = translator
+
+    #override
+    def build_set(self):
+        table = self.dbset.db[self.ktable]
+        if self.fieldnames == '*':
+            fields = [f for f in table]
+        else:
+            fields = [table[k] for k in self.fieldnames]
+        ignore = (FieldVirtual, FieldMethod)
+        fields = filter(lambda f: not isinstance(f, ignore), fields)
+        if self.dbset.db._dbname != 'gae':
+            orderby = self.orderby or reduce(lambda a, b: a | b, fields)
+            groupby = self.groupby
+            distinct = self.distinct
+            left = self.left
+            dd = dict(orderby=orderby, groupby=groupby,
+                      distinct=distinct, cache=self.cache,
+                      cacheable=True, left=left)
+            # records = self.dbset(table).select(*fields, **dd)
+            records = DalView( *fields, translator=self.translator, query=self.dbset(table).query, **dd).execute(compact=False)
+
+        records.compact = True # todo: somehow make it more fluent to work - execute should probably get the same compact=... ?
+        # self.theset = [str(r[self.kfield]) for r in records]
+        self.theset = [str(r[self.kfield]) for r in records]
+        if isinstance(self.label, str):
+            self.labels = [self.label % r for r in records]
+        else:
+            self.labels = [self.label(r) for r in records]
+
+
 class GrandSQLFORM(QuerySQLFORM):
     """adds translator and uses it to generate validators_with_T """
-    pass
+
+    def __init__(self, *fields, **kwargs):
+
+        self.translator = kwargs.pop('translator', None)
+
+        # TODO: delete comment :)
+        # gt = GrandTranslator(
+        #     fields=[db.auth_user.first_name, db.auth_group.role],
+        #     # we want to get tranlations only for first_name and role
+        #     language_id=2
+        # )
+        # inject grand translation feature into AnySQLFORM
+        # def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB(gt, *args, **kwargs)
+
+
+        QuerySQLFORM.__init__(self, *fields, **kwargs)
+
+
 
     def set_default_validator(self, f):
-        pass
-        QuerySQLFORM.set_default_validator(self, f)
+
+        if not self.translator:
+            QuerySQLFORM.set_default_validator(self, f)
+            return
+
+        db = current.db  # todo: for Reactive form should be prefiltered dbset
+        target = f.target_expression  # for brevity
+
+        if getattr(f, 'use_default_IS_IN_DB', None)  or f.type.startswith('reference ') or f.type.startswith('list:reference '):
+            foreign_table = f.type.split()[1]
+            foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
+            # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
+            f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], db[foreign_table]._format)
+
+        elif f.type in ('string', 'text') and f.comparison == 'equals':
+            # if isinstance(target, Field):
+                # f.requires = T_IS_IN_DB(self.translator, db, target._table, "%%(%s)s" % target.name)
+
+            # should work for Field and Expression targets
+                target = f.target_expression
+                # theset = db(target._table).select(target).column(target)
+                theset = DalView(target, translator=self.translator).execute().column(target)
+                f.requires = IS_IN_SET(theset)
+
+
+        else:
+            QuerySQLFORM.set_default_validator(self, f)
