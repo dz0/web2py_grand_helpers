@@ -162,7 +162,7 @@ class FormField( Field ):
             if self.tablename == 'no_table': 
                 pass # TODO:  aliases?
 
-        # for   field   widgets
+        # for   field   widgets   -- involving references
         # TODO: for Expression we could also construct IS_IN_SET or so..  (with distinct)
 
         if hasattr(self, 'type'):
@@ -175,23 +175,22 @@ class FormField( Field ):
 
             # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
             if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field
-
                 # we infer requires  from  FK
                 if self.type.startswith('reference ') or self.type.startswith('list:reference '):
                     foreign_table = self.type.split()[1]
                     # self.target_expression = db[foreign_table]._id  # probably better no, as looses info
                     if not self.requires or self.requires == DEFAULT:
                         self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format))
-                        self.use_default_IS_IN_DB = True
+                        self.validator_overriden = True
 
 
             # TODO: after changing type to reference -- apply logic from previoius paragraph
             if self.type == 'id':  # override, as otherwise field is not shown in form
                 self.type = 'reference %s' % self.tablename
-                self.table = db[self.tablename]
+                self._table = self.table = db[self.tablename] # maybe unnecessary
                 if not self.requires or self.requires == DEFAULT:
                     self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
-                    self.use_default_IS_IN_DB = True
+                    self.validator_overriden = True
 
 
     
@@ -277,7 +276,7 @@ class AnySQLFORM( object  ):
         except RuntimeError as e:
             raise RuntimeError("Form fields shouldn't have same names. \n %s" % e)
 
-        self.default_IS_IN_DB = kwargs.pop('default_IS_IN_DB', None)
+        # self.default_IS_IN_DB = kwargs.pop('default_IS_IN_DB', None)
         for f in self.formfields:
             self.set_default_validator(f)
 
@@ -297,26 +296,9 @@ class AnySQLFORM( object  ):
 
     def set_default_validator(self, f):
         """to be overriden -- example in translations..."""
+        # TODO maybe use  gluon.validators  _default_validators()
+        pass
 
-        db = current.db  # todo: for Reactive form should be prefiltered dbset
-        target = f.target_expression  # for brevity
-
-        # TODO: move to QuerySQLFORM?
-        # if not f.requires or f.requires == DEFAULT:
-
-        if getattr(f, 'use_default_IS_IN_DB', None) and self.default_IS_IN_DB :  # for reference or ex-id type fields
-            # if f.type.startswith('reference ') or f.type.startswith('list:reference '):
-            foreign_table = f.type.split()[1]
-            f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
-
-        if f.type in ('string', 'text') and f.comparison == 'equals':
-            if isinstance(target, Field) and self.default_IS_IN_DB :
-                f.requires = self.default_IS_IN_DB(db, target.table, "%%(%s)s" % target.name)
-
-            # elif type(target) is Expression:
-            #     table = target._table
-            #     theset = db(table).select(target).column(target)
-            #     f.requires = IS_IN_SET(theset)
 
 
     def __getattr__( self, name ):
@@ -608,9 +590,28 @@ class QuerySQLFORM (AnySQLFORM ):
         except RuntimeError as e:
             raise RuntimeError("QueryForm fields shouldn't have same combination of expression and comparison. \n %s" % e)
 
+    def set_default_validator(self, f):
+
+        db = current.db  # todo: for Reactive form should be prefiltered dbset
+        target = f.target_expression  # for brevity
+
+        if f.type.startswith('reference '):
+        # or f.type.startswith('list:reference '):
+            foreign_table = f.type.split()[1]
+            f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
+
+        elif f.type in ('string', 'text') and f.comparison == 'equals':
+            if isinstance(target, Field):
+                f.requires = IS_IN_DB(db, target)
+
+                # elif type(target) is Expression:
+                #     table = target._table
+                #     theset = db(table).select(target).column(target)
+                #     f.requires = IS_IN_SET(theset)
+        else:
+            AnySQLFORM.set_default_validator(self, f)
 
 
-        
     def build_queries(self, ignore_orphaned_fields=False):
         db = self.db
         queries = []

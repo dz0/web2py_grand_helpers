@@ -9,7 +9,7 @@ from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQ
 
 
 # test fields
-from applications.app.modules.plugin_joins_builder.joins_builder import build_joins_chain
+from  plugin_joins_builder.joins_builder import build_joins_chain
 
 
 def test_fields():
@@ -87,7 +87,8 @@ def test_anyform():
 
 def test_dalview_search():
 
-    fields = test_fields() 
+    fields = test_fields()
+    fields[0].comparison = 'equals'
     
     form = QuerySQLFORM( *fields )
 
