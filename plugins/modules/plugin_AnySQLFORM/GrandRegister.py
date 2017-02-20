@@ -250,19 +250,21 @@ class GrandRegister( object ):
 
         self.search_fields_update_triggers = search_fields_update_triggers
 
-
         self.translate_fields = translate_fields
 
         self.response_view = response_view
 
         self.kwargs = kwargs
 
-        # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
-        def my_grand_search_form(*fields, **kwargs):
-            from applications.app.modules.searching import search_form as grand_search_form
-            return grand_search_form(self.cid, *fields, **kwargs)
 
-        kwargs.setdefault( 'form_factory', my_grand_search_form )
+        if False:
+            # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
+            def my_grand_search_form(*fields, **kwargs):
+                from searching import search_form as grand_search_form
+                return grand_search_form(self.cid, *fields, **kwargs)
+
+            kwargs.setdefault( 'form_factory', my_grand_search_form )
+
         # a bit smarter way -- in case   kwargs['form_factory'] is None
         # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
         # kwargs['form_factory'] = self.form_factory
@@ -602,12 +604,118 @@ class GrandTranslator():
 # Validator with translator
 from gluon.validators import IS_IN_DB
 from pydal.objects import Field, FieldVirtual, FieldMethod
+from gluon.sqlhtml import AutocompleteWidget
+from gluon.html import OPTION, SELECT
+
+class T_AutocompleteWidget( AutocompleteWidget ):
+    def __init__( self, translator, *args, **kwargs):
+        self.translator = translator
+        AutocompleteWidget.__init__ (self, *args, **kwargs)
+
+    def callback(self):
+        if self.keyword in self.request.vars:
+            field = self.fields[0]
+
+            rows = DalView(*(self.fields+self.help_fields),
+                           translator=self.translator,
+
+                           query=field.contains(self.request.vars[self.keyword], case_sensitive=False),
+                           # query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
+                           orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
+                           ).execute(compact=False)
+            rows.compact = True # peculiarities of DAL..
+
+            # rows = self.db(field.like(self.request.vars[self.keyword] + '%', case_sensitive=False)).select(orderby=self.orderby, limitby=self.limitby, distinct=self.distinct, *(self.fields+self.help_fields))
+
+            if rows:
+                if self.is_reference:
+                    id_field = self.fields[1]
+                    if self.help_fields:
+                        options = [OPTION(
+                            self.help_string % dict([(h.name, s[h.name]) for h in self.fields[:1] + self.help_fields]),
+                                   _value=s[id_field.name], _selected=(k == 0)) for k, s in enumerate(rows)]
+                    else:
+                        options = [OPTION(
+                            s[field.name], _value=s[id_field.name],
+                            _selected=(k == 0)) for k, s in enumerate(rows)]
+                    raise HTTP(
+                        200, SELECT(_id=self.keyword, _class='autocomplete',
+                                    _size=len(rows), _multiple=(len(rows) == 1),
+                                    *options).xml())
+                else:
+                    raise HTTP(
+                        200, SELECT(_id=self.keyword, _class='autocomplete',
+                                    _size=len(rows), _multiple=(len(rows) == 1),
+                                    *[OPTION(s[field.name],
+                                             _selected=(k == 0))
+                                      for k, s in enumerate(rows)]).xml())
+            else:
+                raise HTTP(200, '')
+
+    def callback_NEWw2p(self):
+        if self.keyword in self.request.vars:
+            field = self.fields[0]
+            if type(field) is Field.Virtual:
+                records = []
+                table_rows = self.db(self.db[field.tablename]).select(orderby=self.orderby)
+                count = 0
+                for row in table_rows:
+                    if self.at_beginning:
+                        if row[field.name].lower().startswith(self.request.vars[self.keyword]):
+                            count += 1
+                            records.append(row)
+                    else:
+                        if self.request.vars[self.keyword] in row[field.name].lower():
+                            count += 1
+                            records.append(row)
+                    if count == 10:
+                        break
+                rows = Rows(self.db, records, table_rows.colnames, compact=table_rows.compact)
+            else:
+
+            # elif settings and settings.global_settings.web2py_runtime_gae:
+            #     rows = self.db(field.__ge__(self.request.vars[self.keyword]) & field.__lt__(self.request.vars[self.keyword] + u'\ufffd')).select(orderby=self.orderby, limitby=self.limitby, *(self.fields+self.help_fields))
+            # elif self.at_beginning:
+            #     rows = self.db(field.like(self.request.vars[self.keyword] + '%', case_sensitive=False)).select(orderby=self.orderby, limitby=self.limitby, distinct=self.distinct, *(self.fields+self.help_fields))
+            # else:
+            #     rows = self.db(field.contains(self.request.vars[self.keyword], case_sensitive=False)).select(orderby=self.orderby, limitby=self.limitby, distinct=self.distinct, *(self.fields+self.help_fields))
+
+                rows = DalView(*(self.fields + self.help_fields),
+                               translator=self.translator,
+
+                               query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
+                               orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
+                               ).execute(compact=False)
+            if rows:
+                if self.is_reference:
+                    id_field = self.fields[1]
+                    if self.help_fields:
+                        options = [OPTION(
+                            self.help_string % dict([(h.name, s[h.name]) for h in self.fields[:1] + self.help_fields]),
+                                   _value=s[id_field.name], _selected=(k == 0)) for k, s in enumerate(rows)]
+                    else:
+                        options = [OPTION(
+                            s[field.name], _value=s[id_field.name],
+                            _selected=(k == 0)) for k, s in enumerate(rows)]
+                    raise HTTP(
+                        200, SELECT(_id=self.keyword, _class='autocomplete',
+                                    _size=len(rows), _multiple=(len(rows) == 1),
+                                    *options).xml())
+                else:
+                    raise HTTP(
+                        200, SELECT(_id=self.keyword, _class='autocomplete',
+                                    _size=len(rows), _multiple=(len(rows) == 1),
+                                    *[OPTION(s[field.name],
+                                             _selected=(k == 0))
+                                      for k, s in enumerate(rows)]).xml())
+            else:
+                raise HTTP(200, '')
+
 
 class T_IS_IN_DB(IS_IN_DB):
     def __init__( self, translator, dbset, field, *args, **kwargs):
-        # super(self, T_IS_IN_DB).__init__ (self, dbset, field, **kwargs)
-        IS_IN_DB.__init__ (self, dbset, field, *args, **kwargs)
         self.translator = translator
+        IS_IN_DB.__init__ (self, dbset, field, *args, **kwargs)
 
     #override
     def build_set(self):
@@ -674,10 +782,24 @@ class GrandSQLFORM(QuerySQLFORM):
             # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
             f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], db[foreign_table]._format)
 
-        elif f.type in ('string', 'text') and f.comparison == 'equals':
-            # if isinstance(target, Field):
-                # f.requires = T_IS_IN_DB(self.translator, db, target._table, "%%(%s)s" % target.name)
 
+        elif f.type in ('string', 'text'):
+            if isinstance(target, Field):
+                if f.comparison == 'equals':
+                    f.requires = T_IS_IN_DB(self.translator, db, target)
+
+                if f.comparison == 'contains':
+                    # f.requires = IS_IN_DB(db, target)
+                    # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Autocomplete-widget
+                    # f.widget = SQLFORM.widgets.autocomplete(
+                    f.widget = T_AutocompleteWidget( self.translator,
+                        current.request,
+                        target
+                        # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
+                        # , id_field=db.category.id
+                    )
+
+            if type(target) is Expression and f.comparison == 'equals':
             # should work for Field and Expression targets
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)

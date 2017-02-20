@@ -120,6 +120,15 @@ def test_dalview_search():
             )    
 
 
+#################################################################################
+#####################                      ###########################
+#####################    Translator        ###########################
+#####################                      ###########################
+#################################################################################
+gt = GrandTranslator(
+    fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
+    language_id=2
+)
 # def grandform( form_factory=SQLFORM.factory ):
 
 def test_grandregister_form_and_ajax_records(  ):
@@ -132,6 +141,7 @@ def test_grandregister_form_and_ajax_records(  ):
                              search_fields = [search_fields ],
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              # , response_view = None
+                             , translator = gt
                              )
 
     # response.view = ...
@@ -182,16 +192,20 @@ def test_grandregister_form_and_ajax_records(  ):
 
 def test_grandregister_render(  ):
     search_fields = test_fields()
+    search_fields[0].comparison = 'equals'
     cols = get_expressions_from_formfields(search_fields )
 
     register = GrandRegister(cols,
                              cid = 'w2ui_test', # w2ui
                              table_name = 'test_grand',
-                             search_fields = [search_fields ],
+                             search_fields = search_fields,
+                             # search_fields = [search_fields ],  # for SOLIDFORM?
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              # , response_view = None
+                             , translator=gt
                              )
     register.render()
+
 
 def populate_fake_translations():
 
@@ -210,11 +224,6 @@ def populate_fake_translations():
 
 
 def test_grandtranslator_expressions():
-
-    gt = GrandTranslator(
-        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
-        language_id=2
-    )
 
     tests = [
         db.auth_user.first_name,  # Field
@@ -239,18 +248,6 @@ def test_grandtranslator_expressions():
 def test_grandtranslator_dalview():
 
     expr = db.auth_user.first_name + db.auth_user.last_name
-
-    gt = GrandTranslator(
-        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
-        language_id=2
-    )
-
-    # left = []
-    # we could translate stuff externally:
-    # translated = gt.translate(expr)
-    # expr = translated.expr
-    # left.extend( translated.left )
-
 
     selection = DalView( expr ,  query=db.auth_user,
                          left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group]],
@@ -278,22 +275,6 @@ def test_grandtranslator_dalview_search():
     expr_col = fields[-2]
     expr_col.comparison = 'equals' # # We will test Expression with IS_IN_SET widget
     search_fields= [ expr_col ] + column_fields
-
-
-    # translations
-    gt = GrandTranslator(
-        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
-        language_id=2
-    )
-
-    # target = expr_col.target_expression
-    # # theset = db(target._table).select(target).column(target)
-    # theset = DalView(target, translator = gt).execute().column(target)
-    # expr_col.requires = IS_IN_SET(theset)
-
-    # inject grand translation feature into AnySQLFORM
-    # def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB( gt,  *args, **kwargs)
-    # form = QuerySQLFORM(*search_fields, default_IS_IN_DB=default_IS_IN_DB)
 
     form = GrandSQLFORM(*search_fields, translator=gt) # uses translator for validators
 

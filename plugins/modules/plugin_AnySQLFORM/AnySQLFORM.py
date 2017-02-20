@@ -600,9 +600,21 @@ class QuerySQLFORM (AnySQLFORM ):
             foreign_table = f.type.split()[1]
             f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
 
-        elif f.type in ('string', 'text') and f.comparison == 'equals':
+        elif f.type in ('string', 'text'):
             if isinstance(target, Field):
-                f.requires = IS_IN_DB(db, target)
+                if f.comparison == 'equals':
+                    f.requires = IS_IN_DB(db, target)
+
+                if f.comparison == 'contains':
+                    # f.requires = IS_IN_DB(db, target)
+                    # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Autocomplete-widget
+                    f.widget = SQLFORM.widgets.autocomplete(
+                        current.request,
+                        target
+                        # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
+                        #, id_field=db.category.id
+                    )
+
 
                 # elif type(target) is Expression:
                 #     table = target._table
@@ -669,7 +681,7 @@ class QuerySQLFORM (AnySQLFORM ):
 ###########
 # some helpers
 
-def get_expressions_from_formfields( formfields, include_orphans = False ):
+def get_expressions_from_formfields( formfields, include_orphans=False ):
     # result = []
     # for f in formfields:
     #     if isinstance(f, FormField):
