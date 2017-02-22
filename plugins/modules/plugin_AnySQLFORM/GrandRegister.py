@@ -8,7 +8,7 @@ from pydal.objects import SQLALL, Query
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
 from gluon.http import HTTP # for grandregister render()
 
-def rename_row_fields(names_map, row, compact=False):
+def rename_row_fields(names_map, row, remove_src=True):
     """
     renames and REGROUPS columns (non compact mode)
     >>> r = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10})
@@ -16,37 +16,72 @@ def rename_row_fields(names_map, row, compact=False):
     >>> #names_map = {db.auth_user.first_name: 'auth.username',  '_extra.count over(*)':'auth.count' }
     >>> newr = rename_row_fields( names_map, r )
 
-    newr = Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10}))
+    newr == Row('auth_user':{'first_name':'Jurgis', 'email':"m@il.as"}, '_extra': { 'count over(*)': 10}))
 
     TODO: could use Adapter .parse(...) ??
     """
 
     db = current.db
+    session = current.session
+    _cached = session.col_2_table_and_field = session.col_2_table_and_field or {} # for caching stuff (in memory?)
+
     def parse_name(name):
-        if '.' in name:
+        """can get Expression or str  and returns (tablename, fieldname)
+        >>> parse_name("auth_user.username")
+        ("auth_user", "username")
+        """
+        if isinstance(name, (list, tuple)):
+            if len(name)==2:  return name
+            else: raise ValueError( "Wrong name to parse: %s" % name )
+
+        if isinstance(name, Expression):
+            if expr in _cached:     return _cached[expr]
+            expr = name
+            name = str(name)
+        else:
+            expr = None
+
+        if name in _cached:        return _cached[name]
+
+        if name.count('.') == 1:
             table, field = name.split('.', 1)
-            if table in db.tables:
-                return table, field
-        return '_extra', name
+            if table in db.tables:  # what if alias?
+                _cached[name] = table, field
+            else:
+                raise ( "Suspicious name to parse -- not table (maybe alias?): %s" % name )
+        else:
+            _cached[name] = '_extra', name
+
+        if expr:   _cached[expr] = _cached[name]  # cache in expression level
+
+        return _cached[name]
 
     # result = defaultdict(dict)
-    result = defaultdict(Row)
-
-    key_fieldnames = [ parse_name(fullname)[1] for fullname in  names_map.keys() ]
+    destination_fields = names_map.values()
 
     for a, b in names_map.items():
 
         atable, afield = parse_name(a)
         btable, bfield = parse_name(b)
         # print 'dbg', btable , bfield , '=',  atable , afield
-        if compact:
-            if key_fieldnames.count(bfield) > 1: # if two/more same names
-                raise KeyError( "duplicate field name :/ %s" % bfield)
-            result[bfield] = row[afield]
-        else:
-            result[btable][bfield] = row[atable][afield]
+        if btable in row   and bfield in row[btable]:
+        #if row.get(btable, {}).get(bfield) is not None:  # if field already exists
+            if destination_fields.count(b) > 1:  # if two/more same names
+                msg = "duplicate destination field in map "
+            else:
+                msg = "field already was in row"
+            raise RuntimeError("Overriding of field (loss of info):  %s.%s \n %s" % (btable, bfield, msg) ) # already existing in row or duplicate in map
 
-    return Row( result )
+
+        if not btable in row:
+            row[btable] = Row()
+        # row.setdefault(btable, Row()) # or {}
+        row[btable][bfield] = row[atable][afield]
+        if remove_src:
+            del row[atable][afield]
+            if not row[atable]: del row[atable] # if empty row left
+
+    return row
 
 
 # from pydal/adapters/base.py
@@ -175,23 +210,33 @@ class DalView(Storage):
         else:
             return self.db(self.query)._select(*self.fields, **self.kwargs_4select())
         
-    def execute(self, translate='transparent' or True or False, compact=False ): # usuall select
+    def execute(self, translate='transparent' or True or False ): # usuall select
         self.guarantee_table_in_query()
         t = self.translate()
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             print "DBG Translated sql 2:", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
-            trows.compact = compact
+            # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
-                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) } # todo: maybe use trows.parse
-                records = [ rename_row_fields( map_2original_names , row, compact) for row in trows ]
-                trows.records = records
-                trows.colnames = [ map_2original_names [ tcol ] for tcol in trows.colnames]
+                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) if str(t)!=str(f) } # todo: maybe use trows.parse
+
+                trows.compact = False
+                for row in trows:
+                    rename_row_fields( map_2original_names, row )
+
+                # records = [ rename_row_fields( map_2original_names , row ) for row in trows ]
+                # trows.records = records # no need, as row is rearranged inplace
+
+                # for nr, colname in enumerate(trows.colnames):
+                #     if colname in map_2original_names:
+                #         trows.colnames[nr] = map_2original_names[colname]
+                trows.colnames = [ map_2original_names.get( col , col )  for col in trows.colnames ]
+                trows.compact = True
             return trows
         else:
             rows = self.db(self.query).select(*self.fields, **self.kwargs_4select())
-            rows.compact = compact
+            # rows.compact = compact
             return rows
 
 def get_grid_kwargs(self):
@@ -417,8 +462,11 @@ class GrandRegister( object ):
         # in real usecase - we want to RENDER first
         def rows_rendered_flattened(rows):
             colnames = rows.colnames
+            _compact = rows.compact
             rows.compact = False
             rows = rows.render()  # apply represent methods
+
+            # TODO: maybe better use rawrows ?
 
             # rows = [ r.as_dict() for r in rows ]  # rows.as_list()
 
@@ -428,6 +476,7 @@ class GrandRegister( object ):
                                             for table, fields in row.items()    for field, val in fields.items() }
                           for row in rows_as_list ]
             rows = flatten(rows)
+            rows.compact = _compact
             # rows = [colnames] + [[ row[col]  for col in colnames ] for row in rows ]
             # result =  TABLE(rows)  # nicer testing
             return rows
@@ -622,8 +671,8 @@ class T_AutocompleteWidget( AutocompleteWidget ):
                            query=field.contains(self.request.vars[self.keyword], case_sensitive=False),
                            # query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
                            orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
-                           ).execute(compact=False)
-            rows.compact = True # peculiarities of DAL..
+                           ).execute() # compact=False
+            # rows.compact = True # peculiarities of DAL..
 
             # rows = self.db(field.like(self.request.vars[self.keyword] + '%', case_sensitive=False)).select(orderby=self.orderby, limitby=self.limitby, distinct=self.distinct, *(self.fields+self.help_fields))
 
@@ -685,7 +734,7 @@ class T_AutocompleteWidget( AutocompleteWidget ):
 
                                query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
                                orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
-                               ).execute(compact=False)
+                               ).execute() # compact=False
             if rows:
                 if self.is_reference:
                     id_field = self.fields[1]
@@ -735,9 +784,9 @@ class T_IS_IN_DB(IS_IN_DB):
                       distinct=distinct, cache=self.cache,
                       cacheable=True, left=left)
             # records = self.dbset(table).select(*fields, **dd)
-            records = DalView( *fields, translator=self.translator, query=self.dbset(table).query, **dd).execute(compact=False)
+            records = DalView( *fields, translator=self.translator, query=self.dbset(table).query, **dd).execute() # compact=False
 
-        records.compact = True # todo: somehow make it more fluent to work - execute should probably get the same compact=... ?
+        # records.compact = True # todo: somehow make it more fluent to work - execute should probably get the same compact=... ?
         # self.theset = [str(r[self.kfield]) for r in records]
         self.theset = [str(r[self.kfield]) for r in records]
         if isinstance(self.label, str):

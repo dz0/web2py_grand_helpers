@@ -314,3 +314,21 @@ def test_grandtranslator_dalview_search():
     )
 
     """    """
+
+
+controller_dir = dir()
+def menu4tests():
+    test_functions = [x for x in controller_dir if x.startswith('test') and x!='tester']
+    response.menu = [('TESTS', False, '',
+                        [
+                            (f, f==request.function, URL(f) )
+                            for f in test_functions
+                        ]
+                     ),
+                     ('populate auth tables', False, URL('populate_fake_auth') ),
+                    ]
+    return response.menu
+
+def index():
+    menu4tests()
+    return dict(menu=MENU(response.menu))
