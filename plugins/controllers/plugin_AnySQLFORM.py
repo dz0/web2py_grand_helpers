@@ -24,8 +24,8 @@ def test_fields():
         db.auth_user.id,
         db.auth_group.role, # db.auth_group.description,
         
-        FormField(db.auth_permission.table_name, requires = IS_IN_DB(db, db.auth_permission.table_name, multiple=True)),
-        SearchField(db.auth_permission.id),
+        FormField(db.auth_permission.table_name, requires = IS_IN_DB(db, db.auth_permission.table_name, multiple=True), comparison='equal'),
+        SearchField(db.auth_permission.id, requires = IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s")),
         
         # no_table items   
         Field('user_id', type='reference auth_user'), 
@@ -191,7 +191,7 @@ def test_grandregister_form_and_ajax_records(  ):
         return result
 
 def test_grandregister_render(  ):
-    search_fields = test_fields()
+    search_fields = test_fields() #[5:6]
     search_fields[0].comparison = 'equals'
     cols = get_expressions_from_formfields(search_fields )
 

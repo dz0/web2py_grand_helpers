@@ -181,7 +181,7 @@ class FormField( Field ):
                     # self.target_expression = db[foreign_table]._id  # probably better no, as looses info
                     if not self.requires or self.requires == DEFAULT:
                         self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format))
-                        self.validator_overriden = True
+                        self.validator_overriden = self.use_default_IS_IN_DB = True
 
 
             # TODO: after changing type to reference -- apply logic from previoius paragraph
@@ -190,7 +190,7 @@ class FormField( Field ):
                 self._table = self.table = db[self.tablename] # maybe unnecessary
                 if not self.requires or self.requires == DEFAULT:
                     self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
-                    self.validator_overriden = True
+                    self.validator_overriden = self.use_default_IS_IN_DB = True
 
 
     
@@ -437,10 +437,11 @@ class SearchField( FormField ):
         
         self.label += " (%s)"%self.name_extension  # DBG
 
-        from gluon.validators import Validator , IS_EMPTY_OR
-        if isinstance( self.requires , Validator):
-            #print( name, field.requires )
-            self.requires = IS_EMPTY_OR( self.requires )
+        if kwargs.pop('validate_IS_EMPTY_OR', False):
+            from gluon.validators import Validator , IS_EMPTY_OR
+            if isinstance( self.requires , Validator):
+                #print( name, field.requires )
+                self.requires = IS_EMPTY_OR( self.requires )
             
         # assign needed properties    
         #self.target_is_aggregate = kwargs.get('target_is_aggregate', None)  # might be used in SearchFORM build_queries

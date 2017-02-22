@@ -103,8 +103,6 @@ class DalView(Storage):
     and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
     """
 
-
-
     def kwargs_4select(self, translation=None):
         kwargs = {key:self[key] for key in SELECT_ARGS if self[key]}
 
@@ -825,11 +823,12 @@ class GrandSQLFORM(QuerySQLFORM):
         db = current.db  # todo: for Reactive form should be prefiltered dbset
         target = f.target_expression  # for brevity
 
-        if getattr(f, 'use_default_IS_IN_DB', None)  or f.type.startswith('reference ') or f.type.startswith('list:reference '):
-            foreign_table = f.type.split()[1]
-            foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
-            # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
-            f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], db[foreign_table]._format)
+        if f.type.startswith('reference ') or f.type.startswith('list:reference '):
+            if f.requires == DEFAULT or getattr(f, 'use_default_IS_IN_DB', None):
+                foreign_table = f.type.split()[1]
+                foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
+                # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
+                f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], db[foreign_table]._format)
 
 
         elif f.type in ('string', 'text'):
