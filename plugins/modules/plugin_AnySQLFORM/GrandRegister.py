@@ -3,6 +3,7 @@
 # from gluon import current
 from AnySQLFORM import *
 from pydal.objects import SQLALL, Query
+from gluon.html import URL, A, CAT, DIV, BEAUTIFY
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -299,8 +300,8 @@ class GrandRegister( object ):
 
         self.kwargs = kwargs
 
-
-        if False:
+        self.use_grand_search_form = kwargs.get('use_grand_search_form', True)
+        if self.use_grand_search_form:
             # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
             def my_grand_search_form(*fields, **kwargs):
                 from searching import search_form as grand_search_form
@@ -360,6 +361,20 @@ class GrandRegister( object ):
         # cid?
         context = self.w2ui_grid()
         context['form'] =  self.search_form
+
+        # for dbg purposes
+        if not self.use_grand_search_form:
+
+            ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
+                URL(vars=dict(_grid=True, _grid_dbg=True), extension=None),
+                [f.name for f in self.search_fields]
+            )
+
+            ajax_link = A('ajax load records', _href=ajax_url, _id="ajax_loader_link")
+            ajax_result_target = DIV( "...AJAX RECORDS target...", _id='grid_records')
+
+            context['form'] = CAT(ajax_result_target, ajax_link, context['form'])
+
         return context
 
     def render(self):
@@ -460,7 +475,7 @@ class GrandRegister( object ):
         # in real usecase - we want to RENDER first
         def rows_rendered_flattened(rows):
             colnames = rows.colnames
-            _compact = rows.compact
+            # _compact = rows.compact
             rows.compact = False
             rows = rows.render()  # apply represent methods
 
@@ -474,7 +489,7 @@ class GrandRegister( object ):
                                             for table, fields in row.items()    for field, val in fields.items() }
                           for row in rows_as_list ]
             rows = flatten(rows)
-            rows.compact = _compact
+            # rows.compact = _compact
             # rows = [colnames] + [[ row[col]  for col in colnames ] for row in rows ]
             # result =  TABLE(rows)  # nicer testing
             return rows

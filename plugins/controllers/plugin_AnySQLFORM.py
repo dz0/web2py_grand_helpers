@@ -131,80 +131,10 @@ gt = GrandTranslator(
 )
 # def grandform( form_factory=SQLFORM.factory ):
 
-def test_grandregister_form_and_ajax_records(  ):
-    search_fields = test_fields()
-    cols = get_expressions_from_formfields(search_fields )
-
-    register = GrandRegister(cols,
-                             cid = 'w2ui_test', # w2ui
-                             table_name = 'test_grand',
-                             search_fields = [search_fields ],
-                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
-                             # , response_view = None
-                             , translator = gt
-                             )
-
-    # response.view = ...
-    if request.vars._grid:
-        response.view = "generic.json"
-
-        rows = register.w2ui_grid_records()
-
-        # return BEAUTIFY(  [ filter, rows ]  )  # for testing
-
-        if request.vars._grid_dbg:
-            def as_htmltable(rows, colnames):
-                from gluon.html import TABLE
-                return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
-            rows = as_htmltable(rows, [FormField(col).name for col in register.columns]) # for testing
-
-        # from gluon.serializers import json
-        # return json(dict(status='success', records = rows ))
-        return dict(status='success', records = rows )  # JSON
-
-        # return DIV( filter, register.records_w2ui() )
-        # return dict(records=register.records_w2ui())
-
-    else:
-        # response.view = "plugin_w2ui_grid/w2ui_grid.html"
-        # register.search_form.      add_button( 'grid', URL(vars=dict(grid=True)))
-
-        result = register.form()
-
-        # for debug purposes:
-        # tablename = register.search_form.table._tablename
-        ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
-                                                URL(vars=dict(_grid=True, _grid_dbg=True), extension=None)  ,
-                                                [f.name for f in register.search_fields]
-                   )
-
-        ajax_link = A('ajax load records', _href=ajax_url)
-        ajax_result_target = DIV( BEAUTIFY(register.records_w2ui() ), _id='grid_records')
-        # register.search_form.      add_button( 'ajax load records', ajax_url )
-        # result['ajax_records']=
-        # result['ats']=ajax_result_target
-
-        # register.search_form[0].insert(0, ajax_link)
-        result['form'] = CAT(ajax_result_target , ajax_link, result['form'] )
 
 
-        return result
 
-def test_grandregister_render(  ):
-    search_fields = test_fields() #[5:6]
-    search_fields[0].comparison = 'equals'
-    cols = get_expressions_from_formfields(search_fields )
 
-    register = GrandRegister(cols,
-                             cid = 'w2ui_test', # w2ui
-                             table_name = 'test_grand',
-                             search_fields = search_fields,
-                             # search_fields = [search_fields ],  # for SOLIDFORM?
-                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
-                             # , response_view = None
-                             , translator=gt
-                             )
-    register.render()
 
 
 def populate_fake_translations():
@@ -314,6 +244,109 @@ def test_grandtranslator_dalview_search():
     )
 
     """    """
+
+
+
+#################################################################################
+#####################                      ###########################
+#####################    GRAND REGISTER        ###########################
+#####################                      ###########################
+#################################################################################
+
+def test_grandregister_form_and_ajax_records(  ):
+    search_fields = test_fields()
+    cols = get_expressions_from_formfields(search_fields )
+
+    register = GrandRegister(cols,
+                             cid = 'w2ui_test', # w2ui
+                             table_name = 'test_grand',
+                             search_fields = search_fields ,
+                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             # , response_view = None
+                             , translator = gt
+                             , use_grand_search_form = False
+                             )
+
+    # response.view = ...
+    if request.vars._grid:
+        response.view = "generic.json"
+
+        rows = register.w2ui_grid_records()
+
+        # return BEAUTIFY(  [ filter, rows ]  )  # for testing
+
+        if request.vars._grid_dbg:
+            def as_htmltable(rows, colnames):
+                from gluon.html import TABLE
+                return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
+            rows = as_htmltable(rows, [FormField(col).name for col in register.columns]) # for testing
+
+        # from gluon.serializers import json
+        # return json(dict(status='success', records = rows ))
+        return dict(status='success', records = rows )  # JSON
+
+        # return DIV( filter, register.records_w2ui() )
+        # return dict(records=register.records_w2ui())
+
+    else:
+        # response.view = "plugin_w2ui_grid/w2ui_grid.html"
+        # register.search_form.      add_button( 'grid', URL(vars=dict(grid=True)))
+
+        result = register.form()
+
+        # for debug purposes:
+        # tablename = register.search_form.table._tablename
+        ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
+                                                URL(vars=dict(_grid=True, _grid_dbg=True), extension=None)  ,
+                                                [f.name for f in register.search_fields]
+                   )
+
+        ajax_link = A('ajax load records', _href=ajax_url, _id="ajax_loader_link")
+        ajax_result_target = DIV( BEAUTIFY(register.w2ui_grid_records() ), _id='grid_records')
+        # register.search_form.      add_button( 'ajax load records', ajax_url )
+        # result['ajax_records']=
+        # result['ats']=ajax_result_target
+
+        # register.search_form[0].insert(0, ajax_link)
+        result['form'] = CAT(ajax_result_target , ajax_link, result['form'] )
+
+
+        return result
+
+def test_grandregister_render(  ):
+    search_fields = test_fields() #[5:6]
+    search_fields[0].comparison = 'equals'
+    cols = get_expressions_from_formfields(search_fields )
+
+    register = GrandRegister(cols,
+                             cid = 'w2ui_test', # w2ui
+                             table_name = 'test_grand',
+                             search_fields = search_fields,
+                             # search_fields = [search_fields ],  # for SOLIDFORM?
+                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             # , response_view = None
+                             , translator=gt
+                             , use_grand_search_form=False
+                             )
+    register.render()
+
+
+
+def test_grandregister():
+    search_fields = test_fields() [:4]
+    cols = get_expressions_from_formfields(search_fields )
+
+    register = GrandRegister(cols,
+                             cid = 'w2ui_test', # w2ui
+                             table_name = 'test_grand',
+                             search_fields = search_fields,
+                             # search_fields = [search_fields ],  # for SOLIDFORM?
+                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             # , response_view = None
+                             , translator=gt
+                             # , use_grand_search_form=False
+                             )
+    register.render()
 
 
 controller_dir = dir()
