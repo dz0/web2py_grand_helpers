@@ -274,7 +274,7 @@ class GrandRegister( object ):
                   search_fields = None,
                   search_fields_update_triggers = None,
                   translate_fields = None,
-                  response_view = "plugin_w2ui_grid/w2ui_grid.html",
+                  response_view = "plugin_AnySQLFORM/w2ui_grid.html",
 
 
                   **kwargs # form_factory
@@ -329,7 +329,7 @@ class GrandRegister( object ):
         # self.translate_fields                               # TODO: for GrandTranslator
 
 
-    def w2ui_grid(self):
+    def w2ui_grid_init(self):
         # some workarounds for grand core stuff
 
         request = current.request
@@ -359,7 +359,7 @@ class GrandRegister( object ):
 
     def form(self):
         # cid?
-        context = self.w2ui_grid()
+        context = self.w2ui_grid_init()
         context['form'] =  self.search_form
 
         # for dbg purposes

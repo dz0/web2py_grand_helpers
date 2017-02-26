@@ -202,7 +202,7 @@ def testgrand_users():
         return stuff
           
     else:                
-        response.view = 'plugin_w2ui_grid/w2ui_grid.html'
+        response.view = 'plugin_w2ui_grid/w2ui_grid_deprecated.html'
         
         # some workarounds for grand core stuff
         response.subtitle  = "test  w2ui_grid"
