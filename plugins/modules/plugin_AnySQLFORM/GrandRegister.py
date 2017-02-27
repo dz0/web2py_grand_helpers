@@ -244,7 +244,26 @@ def get_grid_kwargs(self):
     # def __call__(self):
         # return self.execute()
         
+def create_fast_filters( field, values=None ):
+    """this is kind of Widget """
 
+    # fast filters
+
+    sf = SearchField(field)
+    fast_filters = [{'label': current.T('core__all'), 'selected': True, 'data': {}}, ]
+    if values is None:
+        # for row in field._db(field).select():
+        #     fast_filters.append({'label': row[field.name], 'data': {sf.name: row[field.name]}})
+        values = field._db(field).select().column(field)
+    for val in values:
+        if isinstance(val, dict):
+            filter = val
+        if isinstance(val, (list, tuple)) and len(val)==2:
+            filter = {'label': val[0], 'data': {sf.name: val[1]}}
+        else:  # single litteral
+            fast_filters.append({'label': val, 'data': {sf.name: val}})
+
+    return fast_filters
 
 #
 # GrandDalView -- include translations
@@ -276,7 +295,6 @@ class GrandRegister( object ):
                   translate_fields = None,
                   response_view = "plugin_AnySQLFORM/w2ui_grid.html",
 
-
                   **kwargs # form_factory
                 ):
 
@@ -297,6 +315,8 @@ class GrandRegister( object ):
         self.translate_fields = translate_fields
 
         self.response_view = response_view
+
+        self.fast_filters = kwargs.get('filters') # actually they are addressed to grand_search_form
 
         self.kwargs = kwargs
 
@@ -373,7 +393,10 @@ class GrandRegister( object ):
             ajax_link = A('ajax load records', _href=ajax_url, _id="ajax_loader_link")
             ajax_result_target = DIV( "...AJAX RECORDS target...", _id='grid_records')
 
-            context['form'] = CAT(ajax_result_target, ajax_link, context['form'])
+            context['form'] = CAT(ajax_result_target, ajax_link,
+                                  context['form'] ,
+                                  CAT("fast_filters", self.fast_filters)
+                                  )
 
         return context
 
