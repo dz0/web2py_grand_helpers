@@ -244,26 +244,26 @@ def get_grid_kwargs(self):
     # def __call__(self):
         # return self.execute()
         
-def create_fast_filters( field, values=None, col_name='__map2_SearchField' ): #
+def create_fast_filters(field, values=None, search_field_name='__map2_SearchField'): #
     """this is kind of Widget
-       col_name can be:  '__map2_SearchField' or specified
+       search_field_name can be:  '__map2_SearchField' (default) or specified
        """
 
     # fast filters
 
-    if col_name=='__map2_SearchField':
+    if search_field_name== '__map2_SearchField':
         sf = SearchField(field)
-        col_name = sf.name
+        search_field_name = sf.name
         field = sf.target_expression
 
     else:
         if isinstance(field, SearchField):
             sf = field  # field is already SearchField
-            col_name = sf.name
+            search_field_name = sf.name
             field = field.target_expression
 
         else:
-            col_name = field.name
+            search_field_name = field.name
 
 
     fast_filters = [{'label': current.T('core__all'), 'selected': True, 'data': {}}, ]
@@ -280,9 +280,9 @@ def create_fast_filters( field, values=None, col_name='__map2_SearchField' ): #
                 raise RuntimeError("Wrong value for fast filter: %s" % val)
 
         if isinstance(val, (list, tuple)) and len(val)==2:
-            filter = {'label': val[0], 'data': {col_name: val[1]}}
+            filter = {'label': val[0], 'data': {search_field_name: val[1]}}
         else:  # single litteral
-            filter = {'label': val, 'data': {col_name: val}}
+            filter = {'label': val, 'data': {search_field_name: val}}
 
         fast_filters.append(filter)
 
