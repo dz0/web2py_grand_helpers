@@ -582,8 +582,8 @@ class QuerySQLFORM (AnySQLFORM ):
         """
         # table_name = kwargs.pop('table_name', 'QuerySQLFORM'),
         kwargs.setdefault('table_name', 'QuerySQLFORM')
-        # AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
-        super(QuerySQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
+        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
+        # super(QuerySQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
         # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
         # assertions
         try:

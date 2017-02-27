@@ -324,14 +324,14 @@ def test_grandregister():
     a, b, c, d =  search_fields
     search_fields_structured = [   [a, b],    [c, d]    ]
     register = GrandRegister(cols,
-                             cid = 'w2ui_test', # w2ui
+                             cid='w2ui_test', # w2ui
                              table_name = 'test_grand',
-                             search_fields = search_fields,
-                             # search_fields = search_fields_structured,  # for SOLIDFORM         # search_fields = [ search_fields ],
+                             # search_fields=search_fields,  use_grand_search_form=False  # default tries SOLIDFORM
+                             search_fields = search_fields_structured,  # for SOLIDFORM         # search_fields = [ search_fields ],
+
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              # , response_view = None
                              , translator=gt
-                             # , use_grand_search_form=False  # default tries SOLIDFORM
                              )
     register.render()
 
@@ -348,6 +348,7 @@ def test_group_by_val():
         rows_grouped[name] = [row['auth_group']['role'] for row in  rows_grouped[name] ]
         # rows_grouped[name] = BEAUTIFY(  rows_grouped[name]  )
     return CAT( SQLTABLE(rows), TABLE(map( TR, rows_grouped.items()) ), _border=2  )
+
 
 controller_dir = dir()
 def menu4tests():
