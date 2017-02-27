@@ -244,24 +244,47 @@ def get_grid_kwargs(self):
     # def __call__(self):
         # return self.execute()
         
-def create_fast_filters( field, values=None ):
-    """this is kind of Widget """
+def create_fast_filters( field, values=None, col_name='__map2_SearchField' ): #
+    """this is kind of Widget
+       col_name can be:  '__map2_SearchField' or specified
+       """
 
     # fast filters
 
-    sf = SearchField(field)
+    if col_name=='__map2_SearchField':
+        sf = SearchField(field)
+        col_name = sf.name
+        field = sf.target_expression
+
+    else:
+        if isinstance(field, SearchField):
+            sf = field  # field is already SearchField
+            col_name = sf.name
+            field = field.target_expression
+
+        else:
+            col_name = field.name
+
+
     fast_filters = [{'label': current.T('core__all'), 'selected': True, 'data': {}}, ]
     if values is None:
         # for row in field._db(field).select():
         #     fast_filters.append({'label': row[field.name], 'data': {sf.name: row[field.name]}})
         values = field._db(field).select().column(field)
+
     for val in values:
         if isinstance(val, dict):
-            filter = val
+            if 'data' in val and  'label' in val :
+                filter = val
+            else:
+                raise RuntimeError("Wrong value for fast filter: %s" % val)
+
         if isinstance(val, (list, tuple)) and len(val)==2:
-            filter = {'label': val[0], 'data': {sf.name: val[1]}}
+            filter = {'label': val[0], 'data': {col_name: val[1]}}
         else:  # single litteral
-            fast_filters.append({'label': val, 'data': {sf.name: val}})
+            filter = {'label': val, 'data': {col_name: val}}
+
+        fast_filters.append(filter)
 
     return fast_filters
 
