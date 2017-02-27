@@ -270,7 +270,7 @@ def create_fast_filters(field, values=None, search_field_name='__map2_SearchFiel
     if values is None:
         # for row in field._db(field).select():
         #     fast_filters.append({'label': row[field.name], 'data': {sf.name: row[field.name]}})
-        values = field._db(field).select().column(field)
+        values = field._db(field).select().column(field) # or translated_set
 
     for val in values:
         if isinstance(val, dict):
@@ -374,26 +374,35 @@ class GrandRegister( object ):
 
     def w2ui_grid_init(self):
         # some workarounds for grand core stuff
+        # TODO: maybe refactor to separate W2ui_grid class?..
 
-        request = current.request
         response = current.response
 
-        if self.response_view: response.view = self.response_view
+        if self.response_view:
+            response.view = self.response_view
 
-        response.subtitle = "test  w2ui_grid"
-        response.menu = []
+        # response.subtitle = "test  w2ui_grid"
+        # response.menu = response.menu or []
+
+        self.w2ui_columns = [
+                             {'field': FormField(f).name, 'caption': f.label, 'size': "100%",
+                              'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
+                             for f in self.columns
+                             ]
+        self.w2ui_colnames = [d['field'] for d in self.w2ui_columns]  # parallely alligned to columns
+        self.colnames = [ str(col) for col in self.columns ]          # parallely alligned to columns
+
+        if getattr(self, 'w2ui_sort', None) is None:
+            self.w2ui_sort = [{'field': self.w2ui_colnames[0] }]
+        self.w2ui_sort[0].setdefault('direction', "asc")
 
         context = dict(
             cid = self.cid,
-            w2grid_columns=[
-                {'field': FormField(f).name, 'caption': f.label, 'size': "100%",
-                 'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
-                    for f in self.columns
-                ],
+            w2ui_columns=self.w2ui_columns,
             grid_function=self.grid_function,  # or 'users_grid'
             data_name=self.data_name ,
-            # w2grid_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
-            w2grid_sort=[{'field': FormField(self.columns[0]).name, 'direction': "asc"}],
+
+            w2ui_sort=self.w2ui_sort ,  # w2ui_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
             # table_name
             **self.kwargs
             # ,dbg = response.toolbar()
@@ -476,47 +485,13 @@ class GrandRegister( object ):
 
                                  left_join_chains=self.left_join_chains,
                                  # group order distinct
-                                 **self.kwargs
+                                 **self.kwargs # translator inside
                                  )
 
         return self.selection
 
     def w2ui_grid_records(self):
-
-        # def get_row_field_value(record, colname, columns=None, sqlrows=None):
-        #     """finds column value in rows by colname
-        #     taken from SQLTABLE
-        #     also tries to get some extra info (field)
-        #     """
-        #
-        #     if not columns:
-        #         columns = list(sqlrows.colnames)
-        #     for colname in columns:
-        #         matched_column_field = \
-        #             db._adapter.REGEX_TABLE_DOT_FIELD.match(colname)
-        #         if not matched_column_field:
-        #             if "_extra" in record and colname in record._extra:
-        #                 r = record._extra[colname]
-        #                 row.append(TD(r))
-        #                 continue
-        #             else:
-        #                 raise KeyError(
-        #                     "Column %s not found (SQLTABLE)" % colname)
-        #         (tablename, fieldname) = matched_column_field.groups()
-        #         colname = tablename + '.' + fieldname
-        #         try:
-        #             field = sqlrows.db[tablename][fieldname]
-        #         except (KeyError, AttributeError):
-        #             field = None
-        #         if tablename in record \
-        #                 and isinstance(record, Row) \
-        #                 and isinstance(record[tablename], Row):
-        #             r = record[tablename][fieldname]
-        #         elif fieldname in record:
-        #             r = record[fieldname]
-        #         else:
-        #             raise SyntaxError('something wrong in Rows object')
-        #         return r
+        self.w2ui_grid_init()
 
         # in real usecase - we want to RENDER first
         def rows_rendered_flattened(rows):
@@ -531,8 +506,9 @@ class GrandRegister( object ):
 
             # flatten (with forsed .compact) --- some option in w2p might allow field instead of table.field if jus one table in play
             def flatten(rows_as_list):
-                return[  { field if table == '_extra'   else table+'.'+field : val
-                                            for table, fields in row.items()    for field, val in fields.items() }
+                return    [
+                             { field if table == '_extra'   else table+'.'+field : val
+                                for table, fields in row.items()     for field, val in fields.items()  }
                           for row in rows_as_list ]
             rows = flatten(rows)
             # rows.compact = _compact
@@ -546,26 +522,28 @@ class GrandRegister( object ):
         # map to w2ui colnames
 
         rows =  rows_rendered_flattened(rows)
-        def map_w2ui_colnames(rows_flattened):
-            rez = {}
-            for col in self.columns:
-                # key = str(col.target_expression)
-                # src_key = str(col.target_expression if hasattr(col, 'target_expression')   else  col)
-                src_key = str( FormField(col).target_expression )
-                dest_key = FormField(col).name
-                rez[dest_key] = rows_flattened[src_key]
-            return rez
 
-        rows =  [ map_w2ui_colnames( row) for row in rows ]
+        # list_of_colnames_map = [ dict(name_in_w2ui=FormField(col).name, name_in_db= str(col) )
+        #                           for col in self.columns ]
+        # def exec_map_w2ui_colnames(row_flat):
+        #     return  { d['name_in_w2ui'] : row_flat[ d['name_in_db'] ] for d in list_of_colnames_map }
+        # rows =  [ exec_map_w2ui_colnames( row)   for row in rows ]
+
+        map_colnames_2_w2ui = dict( zip(self.colnames, self.w2ui_colnames ) )
+
+        records =  [ ]
+        for row in rows:
+            r = {  map_colnames_2_w2ui[colname]:  row[ colname ]       for colname in self.colnames }
+            records.append( r )
+
 
         def as_htmltable(rows, colnames):
             from gluon.html import TABLE
             return TABLE([colnames] + [[row[col] for col in colnames] for row in rows])
 
-        # rows = as_htmltable(rows, [FormField(col).name for col in self.columns]) # for testing
+        # records = as_htmltable(records, self.w2ui_colnames) # for testing
 
-        return rows
-
+        return records
 
 
 class GrandTranslator():

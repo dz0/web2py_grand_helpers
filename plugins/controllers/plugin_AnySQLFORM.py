@@ -320,12 +320,19 @@ def test_grandregister_form_and_ajax_records(  ):
 # SWITCH to use searchform with SOLIDFORM.factory  and fast_filters
 use_grand_search_form=True # default is True (and needs test_app)
 
+def test_grandregister_autocomplete_breaks_fastfilters_for_same_field():
+    pass
+    #TODO
+
 def test_grandregister():
     search_fields = test_fields() [:4]
     cols = get_expressions_from_formfields(search_fields )
 
     from plugin_AnySQLFORM.GrandRegister import create_fast_filters, SearchField
-    fast_filters = create_fast_filters(  search_fields[0] )  # TODO create more thoroughly
+    sf = search_fields[0]
+    # fast_filters = create_fast_filters(  sf ) # without translations  # TODO test more thoroughly
+    translated_values = DalView( sf, distinct=True, translator = gt ).execute().column( sf )
+    fast_filters = create_fast_filters( sf, values=translated_values )  # TODO test more thoroughly
 
     if use_grand_search_form:
         # fast filters
