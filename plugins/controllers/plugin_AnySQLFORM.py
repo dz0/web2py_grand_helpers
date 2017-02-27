@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from pygame import fastevent
 
 from pydal.objects import Field #, Row, Expression
 
