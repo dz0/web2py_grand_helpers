@@ -117,7 +117,8 @@ class DalView(Storage):
 
             kwargs['having'] = translation[ 'having' ]
 
-            kwargs['limitby'] = 1, 3
+            if current.dev_limitby:
+                kwargs['limitby'] = dev_limitby  # from models/dev.py
 
         return kwargs
 

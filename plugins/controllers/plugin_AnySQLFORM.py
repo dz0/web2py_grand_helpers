@@ -180,7 +180,7 @@ def test_31_grandtranslator_dalview():
     expr = db.auth_user.first_name + db.auth_user.last_name
 
     selection = DalView( expr ,  query=db.auth_user,
-                         left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group]],
+                         # left_join_chains=[[db.auth_user, db.auth_membership, db.auth_group]],
                          # left = build_joins_chain(db.auth_user, db.auth_membership, db.auth_group),
                          translator = gt
                   )
