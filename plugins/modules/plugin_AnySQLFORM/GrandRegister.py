@@ -117,6 +117,8 @@ class DalView(Storage):
 
             kwargs['having'] = translation[ 'having' ]
 
+            kwargs['limitby'] = 1, 3
+
         return kwargs
 
     def __init__(self, *fields, **kwargs):
@@ -806,7 +808,15 @@ class T_IS_IN_DB(IS_IN_DB):
     #override
     def build_set(self):
         table = self.dbset.db[self.ktable]
-        if self.fieldnames == '*':
+
+        # workaround for backwards compatibility
+        if hasattr(self, 'fields'):
+            self.fieldnames = getattr(self, 'fieldnames', self.fields)
+        else:
+            self.fields = getattr(self, 'fields', self.fieldnames)
+
+
+        if self.fields == 'all' or self.fieldnames == '*':
             fields = [f for f in table]
         else:
             fields = [table[k] for k in self.fieldnames]
@@ -848,7 +858,7 @@ class GrandSQLFORM(QuerySQLFORM):
         # inject grand translation feature into AnySQLFORM
         # def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB(gt, *args, **kwargs)
 
-
+        kwargs.setdefault('table_name', 'GrandSQLFORM')
         QuerySQLFORM.__init__(self, *fields, **kwargs)
 
 
