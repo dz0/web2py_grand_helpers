@@ -42,7 +42,7 @@ def test_fields():
         FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
     ]
     
-def test_queryform():
+def test_20_queryform():
     fields = test_fields() 
     
     # db.auth_permission._format = "%(name)s %(table_name)s (%(id)s)"
@@ -63,7 +63,7 @@ def test_queryform():
     
 
 
-def test_anyform():
+def test_10_anyform():
     
     user_full_name = db.auth_user.first_name + db.auth_user.last_name
     
@@ -85,7 +85,7 @@ def test_anyform():
             )
 
 
-def test_dalview_search():
+def test_22_dalview_search():
 
     fields = test_fields()
     fields[0].comparison = 'equals'
@@ -153,7 +153,7 @@ def populate_fake_translations():
         )
 
 
-def test_grandtranslator_expressions():
+def test_30_grandtranslator_expressions():
 
     tests = [
         db.auth_user.first_name,  # Field
@@ -175,7 +175,7 @@ def test_grandtranslator_expressions():
     results =  [ {expr: repr_t( gt.translate( expr ))}  for expr in tests]
     return dict(tests=results)
 
-def test_grandtranslator_dalview():
+def test_31_grandtranslator_dalview():
 
     expr = db.auth_user.first_name + db.auth_user.last_name
 
@@ -196,7 +196,7 @@ def test_grandtranslator_dalview():
 
 
 
-def test_grandtranslator_dalview_search():
+def test_32_grandtranslator_dalview_search():
 
     fields = test_fields()
 
@@ -253,12 +253,13 @@ def test_grandtranslator_dalview_search():
 #####################                      ###########################
 #################################################################################
 
-def test_grandregister_form_and_ajax_records(  ):
+def test_41_grandregister_form_and_ajax_records(  ):
     search_fields = test_fields()
     cols = get_expressions_from_formfields(search_fields )
 
     register = GrandRegister(cols,
                              cid = 'w2ui_test', # w2ui
+                             data_name = 'test grand',
                              table_name = 'test_grand',
                              search_fields = search_fields ,
                              left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
@@ -269,8 +270,6 @@ def test_grandregister_form_and_ajax_records(  ):
 
     # response.view = ...
     if request.vars._grid:
-        response.view = "generic.json"
-
         rows = register.w2ui_grid_records()
 
         # return BEAUTIFY(  [ filter, rows ]  )  # for testing
@@ -283,6 +282,7 @@ def test_grandregister_form_and_ajax_records(  ):
 
         # from gluon.serializers import json
         # return json(dict(status='success', records = rows ))
+        response.view = "generic.json"
         return dict(status='success', records = rows )  # JSON
 
         # return DIV( filter, register.records_w2ui() )
@@ -319,11 +319,11 @@ def test_grandregister_form_and_ajax_records(  ):
 # SWITCH to use searchform with SOLIDFORM.factory  and fast_filters
 use_grand_search_form=True # default is True (and needs test_app)
 
-def test_grandregister_autocomplete_breaks_fastfilters_for_same_field():
+def test_49_TODO_grandregister_autocomplete_breaks_fastfilters_for_same_field():
     pass
     #TODO
 
-def test_grandregister():
+def test_47_grandregister():
     search_fields = test_fields() [:4]
     cols = get_expressions_from_formfields(search_fields )
 
@@ -369,13 +369,13 @@ def test_grandregister():
                              )
     register.render()
 
-
-def test_grandregister_with_just_SQLFORM():
+test_grandregister = test_47_grandregister
+def test_42_grandregister_with_just_SQLFORM():
     global use_grand_search_form
     use_grand_search_form = False
     test_grandregister()
 
-def test_group_by_val():
+def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
                 left=build_joins_chain( db.auth_user, db.auth_membership, db.auth_group )
                 )
