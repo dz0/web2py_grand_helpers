@@ -882,7 +882,7 @@ class GrandSQLFORM(QuerySQLFORM):
 
         elif f.type in ('string', 'text'):
             if isinstance(target, Field):
-                if f.comparison == 'equals':
+                if f.comparison == 'equal':
                     f.requires = T_IS_IN_DB(self.translator, db, target)
 
                 if f.comparison == 'contains':
@@ -896,7 +896,7 @@ class GrandSQLFORM(QuerySQLFORM):
                         # , id_field=db.category.id
                     )
 
-            if type(target) is Expression and f.comparison == 'equals':
+            if type(target) is Expression and f.comparison == 'equal':
             # should work for Field and Expression targets
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)

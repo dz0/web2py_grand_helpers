@@ -530,7 +530,7 @@ class SearchField( FormField ):
                 # field = target_expression  (Field or expression of Fields)
                 # op = comparison
          
-                if op in ['=', '==']: new_query = expr==value; 
+                if op in ['=', '==', 'equal']: new_query = expr==value;
                 elif op == '<': new_query = expr<value
                 elif op == '>': new_query = expr>value
                 elif op == '<=': new_query = expr<=value
@@ -549,7 +549,8 @@ class SearchField( FormField ):
                      expr.type in ('list:integer', 'list:string', 'list:reference'):
                     if op == 'contains': new_query = expr.contains(value)
                     else: raise RuntimeError("Invalid operation: %s %s %s" %(expr, op, repr(value)) )
-                else: raise RuntimeError("Invalid operation: %s %s %s" %(expr, op, repr(value)) )
+
+                else: raise RuntimeError("Invalid/nonhandled comparison: %s %s %s" %(expr, op, repr(value)) )
                 
                 return new_query       
 
@@ -603,7 +604,7 @@ class QuerySQLFORM (AnySQLFORM ):
 
         elif f.type in ('string', 'text'):
             if isinstance(target, Field):
-                if f.comparison == 'equals':
+                if f.comparison == 'equal':
                     f.requires = IS_IN_DB(db, target)
 
                 if f.comparison == 'contains':

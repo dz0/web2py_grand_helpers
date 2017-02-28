@@ -38,7 +38,7 @@ def test_fields():
 #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
         orphan_with_target,
         # expression (as target)
-        FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equals'),
+        FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
         FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
     ]
     
@@ -88,7 +88,7 @@ def test_10_anyform():
 def test_22_dalview_search():
 
     fields = test_fields()
-    fields[0].comparison = 'equals'
+    fields[0].comparison = 'equal'
     
     form = QuerySQLFORM( *fields )
 
@@ -203,7 +203,7 @@ def test_32_grandtranslator_dalview_search():
     column_fields= fields[:4]   # include expression
 
     expr_col = fields[-2]
-    expr_col.comparison = 'equals' # # We will test Expression with IS_IN_SET widget
+    expr_col.comparison = 'equal' # # We will test Expression with IS_IN_SET widget
     search_fields= [ expr_col ] + column_fields
 
     form = GrandSQLFORM(*search_fields, translator=gt) # uses translator for validators
