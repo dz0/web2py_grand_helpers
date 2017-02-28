@@ -71,10 +71,11 @@ p22
 sg9
 I00
 sg10
-g20
-ssS'name'
+S'id'
 p23
-(dp24
+ssS'name'
+p24
+(dp25
 g4
 I512
 sg5
@@ -83,7 +84,7 @@ sg6
 I3
 sg7
 S'CHAR(512)'
-p25
+p26
 sg9
 I00
 sg10

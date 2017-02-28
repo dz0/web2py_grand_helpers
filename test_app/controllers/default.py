@@ -7,8 +7,8 @@ def index():
     response.flash = T("Hello World")
     return dict(
                 menu = MENU( [
+                  ('plugin_AnySQLFORM', False, URL(c='plugin_AnySQLFORM', f='index')),
                   ('plugin_joins_builder', False, URL(c='plugin_joins_builder', f='index')),
-                  ('plugin_search_form', False, URL(c='plugin_search_form', f='index')),
                 ] )
             )
 
