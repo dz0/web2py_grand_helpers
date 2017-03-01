@@ -388,6 +388,13 @@ def test_70_group_by_val():
         # rows_grouped[name] = BEAUTIFY(  rows_grouped[name]  )
     return CAT( SQLTABLE(rows), TABLE(map( TR, rows_grouped.items()) ), _border=2  )
 
+def test_80_postgre_distinct():
+    sel = DalView(db.auth_user.first_name, distinct=True, translator=gt) # orderby=db.auth_user.first_name
+    print sel.get_sql()
+    return CAT(sel.execute(), PRE(sel.get_sql()) )
+
+def test_111():
+    return dict(a=auth.has_permission('add', 'auth_user'))
 
 controller_dir = dir()
 def menu4tests():
@@ -406,4 +413,4 @@ def menu4tests():
 
 def index():
     menu4tests()
-    return dict(menu=MENU(response.menu))
+    return dict(menu=MENU(response.menu), dbg=response.toolbar())

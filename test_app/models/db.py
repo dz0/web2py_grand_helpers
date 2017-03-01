@@ -87,13 +87,14 @@ from gluon.tools import Auth, Service, PluginManager
 
 	
 # host names must be a list of allowed host names (glob syntax allowed)
-if request.global_settings.web2py_version < "2.14.1":
+# if request.global_settings.web2py_version < "2.14.1":
     
-    auth = Auth(db,signature=False)
-    auth.define_tables(username=False,signature=False)
-else:
-    auth = Auth(db, host_names=myconf.get('host.names'))
-    
+    # auth = Auth(db,signature=False)
+    # auth.define_tables(username=False,signature=False)
+# else:
+    # auth = Auth(db, host_names=myconf.get('host.names'))
+
+auth = Auth(db, signature=False)    
 service = Service()
 plugins = PluginManager()
 

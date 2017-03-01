@@ -89,9 +89,7 @@ def rename_row_fields(names_map, row, remove_src=True):
 SELECT_ARGS = (
      'orderby', 'groupby', 'limitby', 'required', 'cache', 'left', 'distinct',
      'having', 'join', 'for_update', 'processor', 'cacheable',
-     'orderby_on_limitby'
-     )
-
+     'orderby_on_limitby','outer_scoped')
 
 def extend_with_unique(A, B):
     """extends list A with distinct items from B, which were not present in A"""
@@ -104,12 +102,29 @@ class DalView(Storage):
     and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
     """
 
+    def smart_distinct(self, kwargs):
+        """for Postgre, when selecting distinct nonkeys, they should include the order"""
+        if kwargs.distinct:
+            kwargs.setdefault( 'orderby', [] )  # make it list (if it is not yet)
+            # kwargs.orderby. extend( kwargs.distinct )
+            if isinstance(kwargs.distinct , (list, tuple)):
+                extend_with_unique( kwargs.orderby, kwargs.distinct)
+            if kwargs.distinct==True:
+                kwargs.distinct = []
+                extend_with_unique( kwargs.distinct, self.fields )
+                extend_with_unique( kwargs.orderby, kwargs.distinct)
+
+
+    def smart_groupby(self, kwargs):
+        """for Postgre - when selecting aggregates, other fields must be grouped"""
+        pass
+
     def kwargs_4select(self, translation=None):
-        kwargs = {key:self[key] for key in SELECT_ARGS if self[key]}
+        kwargs = Storage( {key:self[key] for key in SELECT_ARGS if self[key]} )
 
         if translation:   # inject translated stuff
-            if 'left' in kwargs and kwargs[ 'left' ]:
-                kwargs[ 'left' ] = kwargs['left'][:] # clone
+            if kwargs.get( 'left' ):
+                kwargs[ 'left' ] = kwargs['left'][:] # clone, to prevent influencing of passed list
                 extend_with_unique( kwargs['left'], translation[ 'left' ])
                 # kwargs[ 'left' ] =  kwargs[ 'left' ] + self._translation[ 'left' ]
             else:
@@ -117,8 +132,13 @@ class DalView(Storage):
 
             kwargs['having'] = translation[ 'having' ]
 
-            if hasattr(current, 'dev_limitby'):
-                kwargs['limitby'] = current.dev_limitby  # from models/dev.py
+
+        # self.smart_distinct(kwargs)
+        # self.smart_groupby(kwargs)
+
+        if hasattr(current, 'dev_limitby'):
+            kwargs['limitby'] = current.dev_limitby  # from models/dev.py
+            kwargs['orderby_on_limitby'] = False
 
         return kwargs
 
@@ -195,12 +215,9 @@ class DalView(Storage):
     def translate(self):
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
-            translated = self.translator.translate( [self.fields, self.query, self.having] )
-            # tfields, tquery, thaving = translated.expr
-            t = Storage()  # full translation info
-            t.fields, t.query, t.having = translated.expr
-            t.left = translated.left  # they should be given at the end of all left
-            return t
+            t = self.translator.translate( [self.fields, self.query, self.having] )
+            t.fields, t.query, t.having = t.pop('expr')
+            return t # also includes left, and affected_fields
 
 
 
@@ -217,7 +234,8 @@ class DalView(Storage):
         t = self.translate()
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
-            print "DBG Translated sql 2:", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
+            if getattr(current, 'DBG', False):
+                print "DBG Translated sql 2:", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
             # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
@@ -227,12 +245,6 @@ class DalView(Storage):
                 for row in trows:
                     rename_row_fields( map_2original_names, row )
 
-                # records = [ rename_row_fields( map_2original_names , row ) for row in trows ]
-                # trows.records = records # no need, as row is rearranged inplace
-
-                # for nr, colname in enumerate(trows.colnames):
-                #     if colname in map_2original_names:
-                #         trows.colnames[nr] = map_2original_names[colname]
                 trows.colnames = [ map_2original_names.get( col , col )  for col in trows.colnames ]
                 trows.compact = True
             return trows
@@ -596,8 +608,8 @@ class GrandTranslator():
     def translate_field(self, field):
         if str(field) in map(str, self.fields):  # direct check probably uses __eq__ for objects and returns nonsense
             t_alias = self.translation_alias( field )
-            if not str(field) in  map(str, self.used_fields):
-                self.used_fields.append( field )
+            if not str(field) in  map(str, self.affected_fields):
+                self.affected_fields.append(field)
             return  t_alias.value.coalesce( field )
             # return  self.adapter.COALESCE( t_alias.value , field)
         else:
@@ -605,7 +617,7 @@ class GrandTranslator():
 
     def generate_left_joins(self):
         joins = []
-        for field in self.used_fields:
+        for field in self.affected_fields:
             t_alias = self.translation_alias(field)
             joins.append(
                 t_alias.on(
@@ -631,7 +643,7 @@ class GrandTranslator():
            left_joins  for translations
         """
 
-        self.used_fields = [ ]
+        self.affected_fields = [ ]
         # self.new_expression = Expression(db,lambda item:item)
 
         # maybe use ideas from https://gist.github.com/Xjs/114831
@@ -684,7 +696,10 @@ class GrandTranslator():
                 return expr
 
         new_expression = _traverse_translate( expression )
-        self.result = Storage( expr=new_expression, left=self.generate_left_joins() )
+        self.result = Storage( expr=new_expression,
+                               left=self.generate_left_joins(),
+                               affected_fields=self.affected_fields
+                               )
 
         return self.result
 
