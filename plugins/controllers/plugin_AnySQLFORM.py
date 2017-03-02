@@ -11,37 +11,41 @@ from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQ
 # test fields
 from  plugin_joins_builder.joins_builder import build_joins_chain
 
+orphan_with_target = Field('orphan_name')
+orphan_with_target.target_expression = db.auth_user.last_name + "bla"
+
+TEST_FIELDS = [
+
+    db.auth_user.first_name,
+    db.auth_user.email,
+
+    db.auth_user.id,
+    db.auth_group.role,  # db.auth_group.description,
+
+    FormField(db.auth_permission.table_name, requires=IS_IN_DB(db, db.auth_permission.table_name, multiple=True),
+              comparison='equal'),
+    SearchField(db.auth_permission.id,
+                requires=IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s")),
+
+    # no_table items
+    Field('user_id', type='reference auth_user'),
+    #        FormField('user_id', type='reference auth_user'),
+
+    Field('bla'),
+    #        FormField( 'bla'),
+    #         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
+    #         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
+    #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
+    orphan_with_target,
+    # expression (as target)
+    FormField(db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
+    FormField(Field('pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure'),
+]
+
 
 def test_fields():
-    orphan_with_target = Field('orphan_name')
-    orphan_with_target.target_expression = db.auth_user.last_name + "bla"
+    return TEST_FIELDS
 
-    return [
-
-        db.auth_user.first_name,
-        db.auth_user.email,
-        
-        db.auth_user.id,
-        db.auth_group.role, # db.auth_group.description,
-        
-        FormField(db.auth_permission.table_name, requires = IS_IN_DB(db, db.auth_permission.table_name, multiple=True), comparison='equal'),
-        SearchField(db.auth_permission.id, requires = IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s")),
-        
-        # no_table items   
-        Field('user_id', type='reference auth_user'), 
-#        FormField('user_id', type='reference auth_user'), 
-        
-        Field( 'bla'),
-#        FormField( 'bla'),
-#         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
-#         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
-#         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
-        orphan_with_target,
-        # expression (as target)
-        FormField( db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
-        FormField( Field( 'pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure' ),  
-    ]
-    
 def test_20_queryform():
     fields = test_fields() 
     
@@ -61,7 +65,6 @@ def test_20_queryform():
             # vars_dict=repr(form.vars),
             )
     
-
 
 def test_10_anyform():
     
@@ -119,7 +122,11 @@ def test_22_dalview_search():
             # vars_dict=repr(form.vars),
             )    
 
-
+test_dalview_search = test_22_dalview_search
+def test_25_dalview_search_VirtualField():
+    f = TEST_FIELDS[0] = Field.Virtual( "virtual", label='Virtualus', f=lambda row: "bla")
+    f.table = f._table = db.auth_user
+    return test_dalview_search()
 #################################################################################
 #####################                      ###########################
 #####################    Translator        ###########################
@@ -365,6 +372,7 @@ def test_47_grandregister():
                               # search_fields=search_fields,  use_grand_search_form=False  # default tries SOLIDFORM
                               # search_fields = search_fields_structured,  # for SOLIDFORM         # search_fields = [ search_fields ],
                              , filters = fast_filters
+                             , formstyle =  None
                              , **kwargs  # SEARCH FIELDS, etc
                              )
     register.render()
@@ -374,6 +382,82 @@ def test_42_grandregister_with_just_SQLFORM():
     global use_grand_search_form
     use_grand_search_form = False
     test_grandregister()
+
+
+# @auth.requires_permission('list', 'subject_subject')
+def test_60_granderp_subjects():
+        from lib.branch import allowed_managers, allowed_subjects_query, is_branch_allowed
+
+        response.subtitle = T('subject_subject__list_form')
+        response.files.append(URL('static', 'subject/js/subjects.js'))
+
+        cid = 'subjects'
+        filters = [{'label': T('core__all'), 'selected': True, 'data': {}}]
+        for c, l in SUBJECT_CLASSES:
+            filters.append({'label': l, 'data': {'classes[]': c}})
+        db.subject_subject.type.default = None
+
+        search_fields =  [
+                [db.subject_subject.title,
+                 Field('manager_ids[]', label=T('subject_subject__manager'),
+                       requires=IS_IN_SET(allowed_managers(db, auth), multiple=True))],
+
+                [Field('classes[]', requires=IS_IN_SET(SUBJECT_CLASSES, multiple=True),
+                       label=T('subject_subject__classes')),
+                 db.subject_subject.rating_id],
+
+                [db.subject_subject.type, db.address_address.country_id],
+                [db.subject_subject.branch_id, db.address_address.city],
+                [db.subject_subject.campaign_id, Field('street', label=T('subject_subject__address'))],
+                [db.subject_subject.activity_id, db.contact_contact.phone],
+            ]
+
+
+        f = db.subject_subject.contact_id
+        f.tablename = f._tablename = "subject_subject"
+        cols = [
+            db.subject_subject.title,
+            db.subject_subject.contact_id, # Virtual
+            # db.subject_subject.address_id, # Virtual
+
+
+            db.subject_subject.activity_id,
+            # Field('subject_subject__main_note', label=T('subject_subject__main_note')),
+            db.address_address.country_id,
+            # db.subject_subject.website,
+            db.subject_subject.pay_term,
+            # db.subject_subject.credit_bank_id,
+        ]
+
+        register = GrandRegister(cols,
+                                 cid=cid,
+                                 table_name='subject_subject',
+
+                                 # left_join_chains=[
+                                 #     [db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]
+                                 # ],
+                                 search_fields = search_fields,
+                                 filters=filters, # fast filters
+                                 # translator=gt
+
+                                formstyle =  None #'divs' if IS_MOBILE else None,
+                                # _class = 'mobile_sqlform' if IS_MOBILE else None,
+                                 )
+        register.render()
+        # form = search_form(
+        #     cid,
+        #     *search_fields,
+        #     # hidden={'subjects_autocomplete_title': URL('subject', 'autocomplete_subject_title.json'),
+        #     #         'subjects_autocomplete_phone': URL('subject', 'autocomplete_subject_phone.json'),
+        #     #         'subjects_autocomplete_street': URL('subject', 'autocomplete_subject_street.json'),
+        #     #         'subjects_autocomplete_city': URL('subject', 'autocomplete_subject_city.json')},
+        #     table_name='subject_subject',
+        #     # formstyle='divs' if IS_MOBILE else None,
+        #     filters=filters
+        # )
+        #
+        # return {'cid': cid, 'form': form}
+
 
 def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
@@ -393,8 +477,11 @@ def test_80_postgre_distinct():
     print sel.get_sql()
     return CAT(sel.execute(), PRE(sel.get_sql()) )
 
-def test_111():
+def test_00_dev_auth_has_permission():
     return dict(a=auth.has_permission('add', 'auth_user'))
+
+
+
 
 controller_dir = dir()
 def menu4tests():

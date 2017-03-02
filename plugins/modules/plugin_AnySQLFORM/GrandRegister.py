@@ -330,7 +330,7 @@ class GrandRegister( object ):
                   left_join_chains = None, # probably would be enough
                   search_fields = None,
                   search_fields_update_triggers = None,
-                  translate_fields = None,
+                  translate_fields = None,  # or translator??
                   response_view = "plugin_AnySQLFORM/w2ui_grid.html",
 
                   **kwargs # form_factory

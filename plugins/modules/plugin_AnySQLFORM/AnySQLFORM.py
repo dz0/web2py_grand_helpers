@@ -78,7 +78,7 @@ class FormField( Field ):
 #         if str(field).startswith('user_id'):
 #             pass
  
-        if not isinstance(field, Expression):
+        if not isinstance(field, (Expression, Field.Virtual) ):
             # if first argument is not Expression
             if 'target_expression' in kwargs: 
                 field = Field( fieldname=field ) # workaround if we get just name instead of field
@@ -91,6 +91,7 @@ class FormField( Field ):
                 #tmp_target_expression = field
                 field = Field( fieldname=field ) 
                 field.target_expression = field # tmp_target_expression
+
             else:
                 raise ValueError("Wrong argument for FormField(..): %s" % field )
                 
