@@ -480,6 +480,205 @@ def test_80_postgre_distinct():
 def test_00_dev_auth_has_permission():
     return dict(a=auth.has_permission('add', 'auth_user'))
 
+def test_01_virtual_field():
+    db.define_table('demo',
+                    Field('name')
+                    , Field.Virtual('virtual', f=lambda r: 'v...'+r.demo.name, table_name='demo')
+                    , Field('bla', default="bla")
+                    )
+    db.demo.truncate()
+    for x in "ABCD":  db.demo.insert( name=x ) # populate
+
+    # return db.demo.fields
+    return SQLFORM.grid(db.demo, fields=[db.demo.virtual, db.demo.name])
+    # return SQLFORM.grid(db.demo, fields=[db.demo[f] for f in db.demo.fields] +[db.demo.virtual] )
+    return db().select(db.demo.ALL)
+
+def define_tables_AB():
+    db.define_table('A',  Field('f1'),  Field('f2')  )
+    db.define_table('B',
+                    Field('f1'),
+                    Field.Virtual('vf2', f=lambda r: "virtual:"+r.A.f1, table_name='B'),
+                    Field('f3')
+                    )
+    db.B.vf2.required_expressions=[db.A.f1]
+
+    db.A.truncate()
+    db.B.truncate()
+
+    for tablename in "AB":
+        table = db[tablename]
+        for nr in "1234":
+            vals =  {fieldname: "%s%s:%s"% (tablename, fieldname, nr )  for fieldname in table.fields[1:] }
+            # vals =  {fieldname: "%(tablename)s %(nr)s %(fieldname)s"% locals()  for fieldname in table.fields[1:] }
+            table.insert( **vals )
+
+def test_02_virtual_field():
+    define_tables_AB()
+
+    # http://www.web2py.com/books/default/chapter/29/06/the-database-abstraction-layer#New-style-virtual-fields
+    db.define_table('item',
+                    Field('unit_price', 'double'),
+                    Field('quantity', 'integer'))
+
+
+
+    db.item.total_price = Field.Virtual('total_price',
+                      lambda row: row.item.unit_price * row.item.quantity
+                      # lambda row: row.A.f1 * row.item.quantity
+                    , table_name='item' )
+
+    db.item.truncate()
+    for i in range(4):
+        db.item.insert(unit_price=[5, 7, 2, 5][i], quantity=i)
+
+    rows = db().select(db.item.ALL, db.item.quantity*2, join=db.A.on(db.A.id==1) )
+
+    # return rows
+    prices = [row.item.total_price for row in rows ]
+
+    return str(prices)
+
+
+
+def select_with_virtuals(dbset, *columns,  **kwargs):
+    """columns can be instance of Expression, Field, Field.Virtual
+
+    acts similary as SQLFORM.grid, but returns Rows object.
+    in the result: records are remapped according to columns,
+    but rawrows and colnames stay as they are in the select...
+
+    nonshown can indicate which columns to select (for virtuals) but exclude from result
+    ps.: in SQLFORM.grid this is done with readable.False
+
+    Example:
+        Table A: f1, f2
+        Table B: f1, vf2(required_expressions: A.f1), f3
+
+    columns = [ B.f1, B.vf2,  B.f3*3 ]
+    -->
+    virtual: [ B.vf2 ]
+    selectable: [ B.f1, B.f3*3, A.f1 ]
+    nonshown: [ A.f1 ]
+
+
+    """
+
+
+    selectable = []
+    virtual = []
+    nonshown = kwargs.pop('nonshown', [])[:]  # used by virtual, but not included in result
+
+
+    ### init: assign what is where
+    for col in columns:
+        if isinstance(col, Field.Virtual):
+            if col not in virtual:
+                virtual.append( col )
+                # look for dependances
+                for required_expr in getattr(col, 'required_expressions', []):
+                    if required_expr not in nonshown:
+                        nonshown.append( required_expr )
+        else:
+            selectable.append( col )
+
+    # make sure nonshown items doesn't appear in columns
+    nonshown = set(nonshown).difference(columns)
+
+
+    # more stuff to nonshow:    #  if not f.readable
+    if kwargs.get('nonreadable_as_nonshown', False):
+        nonreadable =   set ( f for f in columns if not f.readable)
+        nonshown .update( nonreadable )
+        columns = [  f for f in columns if f.readable ] # overrides original columns!
+
+    nonshown = list(nonshown)
+
+    # do SELECT
+    rows = dbset().select(*(selectable+nonshown), **kwargs)
+
+    # remap to resulting fields
+    tmp_compact, rows.compact = rows.compact, False
+    for row in rows:
+        # add virtual fields
+        # this expects virtualfields to have tablename  (or could use tablenames_4_virtualfields)
+        # https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2862
+        for field in virtual:
+            if isinstance(field, Field.Virtual) and field.tablename in row:
+                # try:
+                    # fast path, works for joins
+                    value = row[field.tablename][field.name]
+                    row[field.tablename][field.name] = value # this replaces call with value
+                # except KeyError:
+                #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
+
+
+        # remove nonshown fields/expressions
+        for field in nonshown:
+            del row[field.tablename][field.name]
+            # if len(row[field.tablename]) == 0:
+            if not row[field.tablename]:
+                del row[field.tablename]
+
+    rows.compact = tmp_compact
+
+    # rows.colnames = rows.colnames[:]
+    # for field in nonshown:
+    #     rows.colnames.remove(str(field))
+    rows.colnames = [str(col) for col in columns]
+
+
+    return rows
+
+    def tablenames_4_virtualfields():
+        db = dbset
+        left = kwargs.get('left', [])
+        fields = columns
+
+        # taken from SQLFORM.grid https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2326
+        tablenames = db._adapter.tables(dbset.query)
+        if left is not None:
+            if not isinstance(left, (list, tuple)):
+                left = [left]
+            for join in left:
+                tablenames += db._adapter.tables(join)
+        tables = [db[tablename] for tablename in tablenames]
+        if fields:
+            # add missing tablename to virtual fields
+            for table in tables:
+                for k, f in table.iteritems():
+                    if isinstance(f, Field.Virtual):
+                        f.tablename = table._tablename
+            columns = [f for f in fields if f.tablename in tablenames]
+
+
+
+def test_24_virtual_field():
+    """
+        Example:
+        Table A: f1, f2
+        Table B: f1, vf2(required_expressions: A.f1), f3
+
+    columns = [ B.f1, B.vf2,  B.f3*3 ]
+    -->
+    virtual: [ B.vf2 ]
+    selectable: [ B.f1, B.f3*3, A.f1 ]
+    nonshown: [ A.f1 ]
+
+    """
+
+    define_tables_AB()
+    columns = [db.B.f1, db.B.vf2, db.A.f2+'bla'] # , db.A.f1
+
+    testGrid = False
+    if testGrid:
+        db.A.f1.readable = False
+        return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
+
+    # return select_with_virtuals(db(db.B))
+
+    return select_with_virtuals(db, *columns, left=db.A.on(db.A.id==db.B.id)) #.as_json()
+    # return db().select(db.demo.ALL)
 
 
 
