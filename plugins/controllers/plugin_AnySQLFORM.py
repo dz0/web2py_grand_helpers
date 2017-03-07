@@ -123,10 +123,13 @@ def test_22_dalview_search():
             )    
 
 test_dalview_search = test_22_dalview_search
-def test_25_dalview_search_VirtualField():
+def test_27_dalview_search_VirtualField():
     f = TEST_FIELDS[0] = Field.Virtual( "virtual", label='Virtualus', f=lambda row: "bla")
     f.table = f._table = db.auth_user
     return test_dalview_search()
+
+
+
 #################################################################################
 #####################                      ###########################
 #####################    Translator        ###########################
@@ -494,14 +497,17 @@ def test_01_virtual_field():
     # return SQLFORM.grid(db.demo, fields=[db.demo[f] for f in db.demo.fields] +[db.demo.virtual] )
     return db().select(db.demo.ALL)
 
-def define_tables_AB():
-    db.define_table('A',  Field('f1'),  Field('f2')  )
+def init_tables_AB():
+    db.define_table('A',  Field('f1'),  Field('f2'),  Field.Virtual('vf3', f=lambda r:None, table_name='A')  )
     db.define_table('B',
                     Field('f1'),
                     Field.Virtual('vf2', f=lambda r: "virtual:"+r.A.f1, table_name='B'),
-                    Field('f3')
+                    # FieldVirtual_WithDependancies('vf2', f=lambda r: "virtual:"+r.A.f1, table_name='B'),
+                    Field('f3'),
+                    Field('A_id', db.A)
                     )
     db.B.vf2.required_expressions=[db.A.f1]
+    db.B.vf2.required_joins= [ db.A.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
 
     db.A.truncate()
     db.B.truncate()
@@ -509,12 +515,17 @@ def define_tables_AB():
     for tablename in "AB":
         table = db[tablename]
         for nr in "1234":
-            vals =  {fieldname: "%s%s:%s"% (tablename, fieldname, nr )  for fieldname in table.fields[1:] }
-            # vals =  {fieldname: "%(tablename)s %(nr)s %(fieldname)s"% locals()  for fieldname in table.fields[1:] }
+            vals = {}
+            for fieldname in table.fields[1:]:
+                if fieldname.endswith('_id'):
+                    vals[fieldname] = 5-int(nr)
+                else:
+                    vals [fieldname] = "%s%s:%s"% (tablename, fieldname, nr )
+
             table.insert( **vals )
 
 def test_02_virtual_field():
-    define_tables_AB()
+    init_tables_AB()
 
     # http://www.web2py.com/books/default/chapter/29/06/the-database-abstraction-layer#New-style-virtual-fields
     db.define_table('item',
@@ -541,6 +552,19 @@ def test_02_virtual_field():
 
 
 
+class FieldVirtual_WithDependancies(Field.Virtual):
+    def __init__(self, name, f=None, ftype='string', label=None, table_name=None,
+                 required_expressions=[],  required_joins=[]):
+        Field.Virtual.__init__(self, name, f, ftype, label, table_name)
+        self.required_expressions = required_expressions
+        self.required_joins = required_joins
+
+
+class FieldVirtual_Aggregate(Field.Virtual):
+    pass
+    # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
+    #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
+
 def select_with_virtuals(dbset, *columns,  **kwargs):
     """columns can be instance of Expression, Field, Field.Virtual
 
@@ -561,13 +585,13 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
     selectable: [ B.f1, B.f3*3, A.f1 ]
     nonshown: [ A.f1 ]
 
-
     """
 
 
     selectable = []
-    virtual = []
+    virtual = [];    join_chains = []
     nonshown = kwargs.pop('nonshown', [])[:]  # used by virtual, but not included in result
+
 
 
     ### init: assign what is where
@@ -575,10 +599,14 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
         if isinstance(col, Field.Virtual):
             if col not in virtual:
                 virtual.append( col )
+
                 # look for dependances
                 for required_expr in getattr(col, 'required_expressions', []):
                     if required_expr not in nonshown:
                         nonshown.append( required_expr )
+                required_joins = getattr(col, 'required_joins', [])
+                if required_joins:
+                    join_chains.extend(  required_joins )
         else:
             selectable.append( col )
 
@@ -595,6 +623,8 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
     nonshown = list(nonshown)
 
     # do SELECT
+    if required_joins:
+        kwargs.setdefault('left', []).extend(  required_joins )
     rows = dbset().select(*(selectable+nonshown), **kwargs)
 
     # remap to resulting fields
@@ -605,12 +635,19 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
         # https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2862
         for field in virtual:
             if isinstance(field, Field.Virtual) and field.tablename in row:
-                # try:
-                    # fast path, works for joins
-                    value = row[field.tablename][field.name]
-                    row[field.tablename][field.name] = value # this replaces call with value
-                # except KeyError:
-                #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
+
+                    if hasattr(field, 'f_aggregate'):
+                        field.f = lambda r: field.f_aggregate(r, context_rows=rows)
+
+                        row[field.tablename][field.name] = field.f_aggregate(row, context_rows=rows)
+                        # TODO: remove else
+                    else:
+                    # try:
+                        # fast path, works for joins
+                        value = row[field.tablename][field.name]
+                        row[field.tablename][field.name] = value # this replaces call with value
+                    # except KeyError:
+                    #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
 
 
         # remove nonshown fields/expressions
@@ -625,6 +662,7 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
     # rows.colnames = rows.colnames[:]
     # for field in nonshown:
     #     rows.colnames.remove(str(field))
+    rows.rawcolnames = rows.colnames
     rows.colnames = [str(col) for col in columns]
 
 
@@ -657,7 +695,7 @@ def test_24_virtual_field():
     """
         Example:
         Table A: f1, f2
-        Table B: f1, vf2(required_expressions: A.f1), f3
+        Table B: f1, vf2(required_expressions: A.f1), f3, A_id
 
     columns = [ B.f1, B.vf2,  B.f3*3 ]
     -->
@@ -667,18 +705,94 @@ def test_24_virtual_field():
 
     """
 
-    define_tables_AB()
-    columns = [db.B.f1, db.B.vf2, db.A.f2+'bla'] # , db.A.f1
+    init_tables_AB()
+    columns = [db.B.f1, db.B.vf2, db.A.f2+'bla'] # Field, Field.Virtual, Expression
 
-    testGrid = False
-    if testGrid:
-        db.A.f1.readable = False
-        return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
+    # testGrid = False
+    # if testGrid:
+    #     db.A.f1.readable = False
+    #     return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
 
     # return select_with_virtuals(db(db.B))
 
-    return select_with_virtuals(db, *columns, left=db.A.on(db.A.id==db.B.id)) #.as_json()
+    return select_with_virtuals(db, *columns) #.as_json()
+    # return select_with_virtuals(db, *columns, left=db.A.on(db.A.id==db.B.id)) #.as_json()
     # return db().select(db.demo.ALL)
+
+def test_25_virtual_field_Represent_TODO():
+    rows = test_24_virtual_field()
+    rows.render()
+    return rows
+
+def test_26_virtual_field_Aggregate():
+    """
+        Example:
+        Table A: f1, f2, vf3(Aggregate list A)
+        Table B: f1, vf2(required_expressions: A.f1), f3, A_id
+
+    columns = [ B.f1, B.vf2,  B.f3*3 ]
+    -->
+    virtual: [ B.vf2 ]
+    selectable: [ B.f1, B.f3*3, A.f1 ]
+    nonshown: [ A.f1 ]
+
+    """
+
+    init_tables_AB()
+
+    db.A.vf3.required_expressions=[db.B.id] # Postgre could be:, 'array_to_string(array_agg(B.id), ',')']
+    db.A.vf3.required_joins= [ db.B.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
+
+    def agg_list(row, context_rows=None):
+        """context_rows is Rows object, which has the stuff to get """
+        my_id = row[db.A][db.A.id]
+        if context_rows is not None:
+            # ids = context_rows.column(db.B.id)
+            if hasattr(context_rows, 'grouped_Avf3'):  # if cached
+                grouped = context_rows.grouped_Avf3
+            else:
+                grouped = context_rows.group_by_value(db.A.id)
+                context_rows.grouped_Avf3 = grouped # cache
+        else:
+            "there is nowhere to cache? - do fresh request..."
+            # rows = select(... belongs...)
+            # rows.compact = False
+            # grouped = context_rows.group_by_value(db.A.id)
+            # pass
+
+
+        agg = [r[db.B][db.B.id]  for r in  grouped[my_id]  ]
+        agg_concat = ', '.join( map(str, agg ) )
+        return agg_concat
+
+
+    db.A.vf3.f_aggregate = agg_list
+
+    # generate more records in B with refs to A
+    table = db.B
+    import random
+    for nr in range(5, 10):
+        vals = {}
+        for fieldname in table.fields[1:]:
+            if fieldname=='A_id':
+                vals[fieldname] = random.randint(1, 4)
+            else:
+                vals[fieldname] = "%s%s:%s" % (table._tablename, fieldname, nr)
+        table.insert(**vals)
+
+    ########
+    # Define cols
+    columns = [db.A.id, db.B.id, db.A.vf3 , ] # Field, Field.Virtual, Expression
+
+    # testGrid = False
+    # if testGrid:
+    #     db.A.f1.readable = False
+    #     return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
+
+    return select_with_virtuals(db, *columns
+                                # , groupby=db.A.id
+                                , orderby=db.A.id
+                                )
 
 
 
