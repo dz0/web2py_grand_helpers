@@ -498,7 +498,7 @@ def test_01_virtual_field():
     return db().select(db.demo.ALL)
 
 def init_tables_AB():
-    db.define_table('A',  Field('f1'),  Field('f2'),  Field.Virtual('vf3', f=lambda r:None, table_name='A')  )
+    db.define_table('A',  Field('f1'),  Field('f2'),  Field.Virtual('vf3_agg', f=lambda r:None, table_name='A')  )
     db.define_table('B',
                     Field('f1'),
                     Field.Virtual('vf2', f=lambda r: "virtual:"+r.A.f1, table_name='B'),
@@ -565,6 +565,44 @@ class FieldVirtual_Aggregate(Field.Virtual):
     # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
     #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
 
+from gluon.storage import Storage
+def agg_list_singleton(vfield, context_rows):
+    """context_rows is Rows object, which has the stuff to get """
+
+    # db_is_posgre = False
+    # if db_is_posgre:  # TODO
+    #     if isinstance(groupby, (list, tuple)):
+    #          groupby = reduce(lambda a, b: a|b, groupby)
+    # vfield.aggregate_select_kwargs['groupby'] = groupby
+
+    # agg_expr = "json_agg(%s)" % expr
+
+    # construct query
+
+    cache_name = 'grouped_4_' + vfield.name
+    if hasattr(context_rows, cache_name):  # if cached
+        grouped = getattr(context_rows, cache_name) # get chache
+    else:
+        agg_vars = vfield.aggregate = Storage(vfield.aggregate) # convert to Storage
+        # if hasattr(vfield, 'required_joins'):
+        #     agg_vars.select_kwargs.setdefault('left', vfield.required_joins)
+        agg_vars.setdefault('groupby', db[vfield.tablename]._id)
+        groupby = agg_vars.groupby
+
+        ids = context_rows.column(groupby)
+
+        rows_4grouping = db(  groupby.belongs( set(ids) ) ).select(groupby,  *agg_vars.required_expressions,
+                                                                        **agg_vars.select__kwargs)
+        # TODO DalView
+        # for r in rows_4grouping:
+        #     r.setdefault(vfield.tablename, Row())
+        #     r[vfield.tablename][vfield.name] = vfield.f(r)
+        grouped = rows_4grouping.group_by_value(groupby)
+        setattr(context_rows, cache_name,  grouped) # set cache
+
+    return grouped
+
+
 def select_with_virtuals(dbset, *columns,  **kwargs):
     """columns can be instance of Expression, Field, Field.Virtual
 
@@ -576,7 +614,7 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
     ps.: in SQLFORM.grid this is done with readable.False
 
     Example:
-        Table A: f1, f2
+        Table A: f1, f2, vf3_agg (aggregate:required_expressions: B.id)
         Table B: f1, vf2(required_expressions: A.f1), f3
 
     columns = [ B.f1, B.vf2,  B.f3*3 ]
@@ -587,11 +625,9 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
 
     """
 
-
     selectable = []
-    virtual = [];    join_chains = []
+    virtual = [];    joins = []
     nonshown = kwargs.pop('nonshown', [])[:]  # used by virtual, but not included in result
-
 
 
     ### init: assign what is where
@@ -600,13 +636,17 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
             if col not in virtual:
                 virtual.append( col )
 
+                if getattr(col, 'aggregate', None):
+                    continue  # skip aggregateble vfields
+
                 # look for dependances
                 for required_expr in getattr(col, 'required_expressions', []):
                     if required_expr not in nonshown:
                         nonshown.append( required_expr )
                 required_joins = getattr(col, 'required_joins', [])
                 if required_joins:
-                    join_chains.extend(  required_joins )
+                    # todo: maybe prevent duplication of joined tables: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
+                    joins.extend(  required_joins )
         else:
             selectable.append( col )
 
@@ -623,8 +663,8 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
     nonshown = list(nonshown)
 
     # do SELECT
-    if required_joins:
-        kwargs.setdefault('left', []).extend(  required_joins )
+    if joins:
+        kwargs.setdefault('left', []).extend(  joins )
     rows = dbset().select(*(selectable+nonshown), **kwargs)
 
     # remap to resulting fields
@@ -636,18 +676,20 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
         for field in virtual:
             if isinstance(field, Field.Virtual) and field.tablename in row:
 
-                    if hasattr(field, 'f_aggregate'):
-                        field.f = lambda r: field.f_aggregate(r, context_rows=rows)
+                    if hasattr(field, 'aggregate'):
+                        id_field = field.aggregate['groupby']
+                        group_id = row[id_field]
+                        rows_4_aggregate = agg_list_singleton(vfield=field, context_rows=rows)
+                        group = rows_4_aggregate[group_id]
+                        field.f = lambda r: field.aggregate.f(r, group) # is not called directly
+                        row[field.tablename][field.name] = field.aggregate.f(row, group)
 
-                        row[field.tablename][field.name] = field.f_aggregate(row, context_rows=rows)
-                        # TODO: remove else
                     else:
-                    # try:
-                        # fast path, works for joins
+                        # execute virtual function
                         value = row[field.tablename][field.name]
                         row[field.tablename][field.name] = value # this replaces call with value
-                    # except KeyError:
-                    #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
+                        # except KeyError:
+                        #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
 
 
         # remove nonshown fields/expressions
@@ -727,7 +769,7 @@ def test_25_virtual_field_Represent_TODO():
 def test_26_virtual_field_Aggregate():
     """
         Example:
-        Table A: f1, f2, vf3(Aggregate list A)
+        Table A: f1, f2, vf3_agg(Aggregate list A)
         Table B: f1, vf2(required_expressions: A.f1), f3, A_id
 
     columns = [ B.f1, B.vf2,  B.f3*3 ]
@@ -740,33 +782,16 @@ def test_26_virtual_field_Aggregate():
 
     init_tables_AB()
 
-    db.A.vf3.required_expressions=[db.B.id] # Postgre could be:, 'array_to_string(array_agg(B.id), ',')']
-    db.A.vf3.required_joins= [ db.B.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
+    # db.A.vf3_agg.f = lambda r: "ref %s" % r[db.B.id]
 
-    def agg_list(row, context_rows=None):
-        """context_rows is Rows object, which has the stuff to get """
-        my_id = row[db.A][db.A.id]
-        if context_rows is not None:
-            # ids = context_rows.column(db.B.id)
-            if hasattr(context_rows, 'grouped_Avf3'):  # if cached
-                grouped = context_rows.grouped_Avf3
-            else:
-                grouped = context_rows.group_by_value(db.A.id)
-                context_rows.grouped_Avf3 = grouped # cache
-        else:
-            "there is nowhere to cache? - do fresh request..."
-            # rows = select(... belongs...)
-            # rows.compact = False
-            # grouped = context_rows.group_by_value(db.A.id)
-            # pass
+    # db.A.vf3_agg.required_expressions=[db.B.id]      # Postgre could be:, 'array_to_string(array_agg(B.id), ',')']
+    # db.A.vf3_agg.required_joins= [ db.B.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
+    db.A.vf3_agg.aggregate = dict(    groupby=db.A.id,
+                                      select__kwargs=dict(left=[db.B.on(db.B.A_id == db.A.id)] ),
+                                      required_expressions=[db.B.id],
+                                      f =   lambda row, group:  ', '.join( map(str, map(lambda r: r[db.B.id], group )) )
+                                      )
 
-
-        agg = [r[db.B][db.B.id]  for r in  grouped[my_id]  ]
-        agg_concat = ', '.join( map(str, agg ) )
-        return agg_concat
-
-
-    db.A.vf3.f_aggregate = agg_list
 
     # generate more records in B with refs to A
     table = db.B
@@ -782,7 +807,7 @@ def test_26_virtual_field_Aggregate():
 
     ########
     # Define cols
-    columns = [db.A.id, db.B.id, db.A.vf3 , ] # Field, Field.Virtual, Expression
+    columns = [db.A.id, db.B.id, db.A.vf3_agg ] # Field, Field.Virtual, Expression
 
     # testGrid = False
     # if testGrid:
@@ -791,7 +816,9 @@ def test_26_virtual_field_Aggregate():
 
     return select_with_virtuals(db, *columns
                                 # , groupby=db.A.id
+                                , left = build_joins_chain(db.A, db.B)
                                 , orderby=db.A.id
+                                , limitby=(0,5)
                                 )
 
 
