@@ -567,7 +567,10 @@ class FieldVirtual_Aggregate(Field.Virtual):
 
 from gluon.storage import Storage
 def agg_list_singleton(vfield, context_rows):
-    """context_rows is Rows object, which has the stuff to get """
+    """context_rows is Rows object, which has the stuff to get
+    # maybe could use rows.join()  https://github.com/web2py/pydal/blob/3837691a943cf491572de289f822dcbad62e2b16/pydal/objects.py#L2803   https://groups.google.com/forum/#!topic/web2py/_xQUWYXZG54
+
+    """
 
     # db_is_posgre = False
     # if db_is_posgre:  # TODO
@@ -590,13 +593,20 @@ def agg_list_singleton(vfield, context_rows):
         groupby = agg_vars.groupby
 
         ids = context_rows.column(groupby)
+        query = groupby.belongs( set(ids) )
 
-        rows_4grouping = db(  groupby.belongs( set(ids) ) ).select(groupby,  *agg_vars.required_expressions,
-                                                                        **agg_vars.select__kwargs)
-        # TODO DalView
-        # for r in rows_4grouping:
-        #     r.setdefault(vfield.tablename, Row())
-        #     r[vfield.tablename][vfield.name] = vfield.f(r)
+        # ordinary select
+        # rows_4grouping = db(  query ).select(groupby,  *agg_vars.required_expressions,
+        #                                                                 **agg_vars.select__kwargs)
+
+
+        # DalView with translator
+        translator = agg_vars.translator # or use global
+        selection = DalView(groupby,  *agg_vars.required_expressions,
+                            translator=translator, query=query, **agg_vars.select__kwargs)
+
+        rows_4grouping = selection.execute()
+
         grouped = rows_4grouping.group_by_value(groupby)
         setattr(context_rows, cache_name,  grouped) # set cache
 
@@ -662,10 +672,17 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
 
     nonshown = list(nonshown)
 
-    # do SELECT
+    # do SELECT  -- get data rows
     if joins:
         kwargs.setdefault('left', []).extend(  joins )
-    rows = dbset().select(*(selectable+nonshown), **kwargs)
+
+
+    translator= kwargs.pop('translator', None)
+    selection = DalView( *(selectable+nonshown), translator=translator, query=dbset().query,  **kwargs )
+    rows = selection.execute()
+
+    # rows = dbset().select(*(selectable+nonshown), **kwargs)  # standart select
+
 
     # remap to resulting fields
     tmp_compact, rows.compact = rows.compact, False
@@ -781,6 +798,7 @@ def test_26_virtual_field_Aggregate():
     """
 
     init_tables_AB()
+    gt.fields.append(db.B.f1)  # instruct translator to lookup B.f1
 
     # db.A.vf3_agg.f = lambda r: "ref %s" % r[db.B.id]
 
@@ -788,8 +806,11 @@ def test_26_virtual_field_Aggregate():
     # db.A.vf3_agg.required_joins= [ db.B.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
     db.A.vf3_agg.aggregate = dict(    groupby=db.A.id,
                                       select__kwargs=dict(left=[db.B.on(db.B.A_id == db.A.id)] ),
-                                      required_expressions=[db.B.id],
-                                      f =   lambda row, group:  ', '.join( map(str, map(lambda r: r[db.B.id], group )) )
+                                      # required_expressions=[db.B.id, db.B.f1],
+                                      required_expressions=[db.B.id, db.B.f1],
+                                      # f =   lambda row, group:  ', '.join( map(, map(lambda r: r[db.B.id], group )) )
+                                      f =   lambda row, group:  ', '.join(  map(lambda r: "%(id)s %(f1)s"%r[db.B], group )  )
+                                      , translator = gt
                                       )
 
 
@@ -814,13 +835,16 @@ def test_26_virtual_field_Aggregate():
     #     db.A.f1.readable = False
     #     return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
 
-    return select_with_virtuals(db, *columns
+    rows = select_with_virtuals(db, *columns
                                 # , groupby=db.A.id
+                                , translator = gt
                                 , left = build_joins_chain(db.A, db.B)
                                 , orderby=db.A.id
                                 , limitby=(0,5)
+
                                 )
 
+    return dict( rows=rows )
 
 
 controller_dir = dir()
