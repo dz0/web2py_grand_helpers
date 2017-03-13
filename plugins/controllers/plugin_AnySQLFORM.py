@@ -14,7 +14,9 @@ from  plugin_joins_builder.joins_builder import build_joins_chain
 orphan_with_target = Field('orphan_name')
 orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 
-TEST_FIELDS = [
+def test_fields():
+    global TEST_FIELDS
+    TEST_FIELDS = [
 
     db.auth_user.first_name,
     db.auth_user.email,
@@ -41,10 +43,10 @@ TEST_FIELDS = [
     FormField(db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
     FormField(Field('pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure'),
 ]
-
-
-def test_fields():
     return TEST_FIELDS
+
+test_fields()
+
 
 def test_20_queryform():
     fields = test_fields() 
@@ -524,6 +526,18 @@ def init_tables_AB():
 
             table.insert( **vals )
 
+    # generate more records in B with refs to A
+    table = db.B
+    import random
+    for nr in range(5, 10):
+        vals = {}
+        for fieldname in table.fields[1:]:
+            if fieldname=='A_id':
+                vals[fieldname] = random.randint(1, 4)
+            else:
+                vals[fieldname] = "%s%s:%s" % (table._tablename, fieldname, nr)
+        table.insert(**vals)
+
 def test_02_virtual_field():
     init_tables_AB()
 
@@ -693,7 +707,7 @@ def select_with_virtuals(dbset, *columns,  **kwargs):
         for field in virtual:
             if isinstance(field, Field.Virtual) and field.tablename in row:
 
-                    if hasattr(field, 'aggregate'):
+                    if hasattr(field, 'aggregate'): # aggregate virtuals always do extra join now (though they might reuse exixting rows (if all of them are selecteed))
                         id_field = field.aggregate['groupby']
                         group_id = row[id_field]
                         rows_4_aggregate = agg_list_singleton(vfield=field, context_rows=rows)
@@ -814,21 +828,12 @@ def test_26_virtual_field_Aggregate():
                                       )
 
 
-    # generate more records in B with refs to A
-    table = db.B
-    import random
-    for nr in range(5, 10):
-        vals = {}
-        for fieldname in table.fields[1:]:
-            if fieldname=='A_id':
-                vals[fieldname] = random.randint(1, 4)
-            else:
-                vals[fieldname] = "%s%s:%s" % (table._tablename, fieldname, nr)
-        table.insert(**vals)
+
 
     ########
     # Define cols
-    columns = [db.A.id, db.B.id, db.A.vf3_agg ] # Field, Field.Virtual, Expression
+    columns = [db.A.id, db.A.vf3_agg ]; left=None # Field, Field.Virtual, Expression
+    # columns = [db.A.id, db.B.id, db.A.vf3_agg ]; left = build_joins_chain(db.A, db.B) # Field, Field.Virtual, Expression
 
     # testGrid = False
     # if testGrid:
@@ -838,7 +843,7 @@ def test_26_virtual_field_Aggregate():
     rows = select_with_virtuals(db, *columns
                                 # , groupby=db.A.id
                                 , translator = gt
-                                , left = build_joins_chain(db.A, db.B)
+                                , left=left
                                 , orderby=db.A.id
                                 , limitby=(0,5)
 

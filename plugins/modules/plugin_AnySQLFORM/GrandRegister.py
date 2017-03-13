@@ -115,7 +115,7 @@ class DalView(Storage):
                 extend_with_unique( kwargs.orderby, kwargs.distinct)
 
 
-    def smart_groupby(self, kwargs):
+    def smart_groupby(self, kwargs):  # todo
         """for Postgre - when selecting aggregates, other fields must be grouped"""
         pass
 
@@ -212,18 +212,19 @@ class DalView(Storage):
                     self.query = main_table
                     return self.query
 
-    def translate(self):
+    def translate_expressions(self):
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
             t = self.translator.translate( [self.fields, self.query, self.having] )
             t.fields, t.query, t.having = t.pop('expr')
-            return t # also includes left, and affected_fields
+            if t.affected_fields:
+                return t # also includes left, and affected_fields
 
 
 
     def get_sql(self, translate=True):
         self.guarantee_table_in_query()
-        t = self.translate()
+        t = self.translate_expressions()
         if translate and t:
             return self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
         else:
@@ -231,7 +232,7 @@ class DalView(Storage):
         
     def execute(self, translate='transparent' or True or False ): # usuall select
         self.guarantee_table_in_query()
-        t = self.translate()
+        t = self.translate_expressions()
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             if getattr(current, 'DBG', False):
