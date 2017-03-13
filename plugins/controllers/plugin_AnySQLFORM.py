@@ -4,7 +4,7 @@ from pydal.objects import Field #, Row, Expression
 
 from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_from_formfields
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
-from plugin_AnySQLFORM.GrandRegister import GrandRegister, DalView
+from plugin_AnySQLFORM.GrandRegister import GrandRegister, DalView, grand_select
 from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
 
 
@@ -579,188 +579,7 @@ class FieldVirtual_Aggregate(Field.Virtual):
     # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
     #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
 
-from gluon.storage import Storage
-def agg_list_singleton(vfield, context_rows):
-    """context_rows is Rows object, which has the stuff to get
-    # maybe could use rows.join()  https://github.com/web2py/pydal/blob/3837691a943cf491572de289f822dcbad62e2b16/pydal/objects.py#L2803   https://groups.google.com/forum/#!topic/web2py/_xQUWYXZG54
 
-    """
-
-    # db_is_posgre = False
-    # if db_is_posgre:  # TODO
-    #     if isinstance(groupby, (list, tuple)):
-    #          groupby = reduce(lambda a, b: a|b, groupby)
-    # vfield.aggregate_select_kwargs['groupby'] = groupby
-
-    # agg_expr = "json_agg(%s)" % expr
-
-    # construct query
-
-    cache_name = 'grouped_4_' + vfield.name
-    if hasattr(context_rows, cache_name):  # if cached
-        grouped = getattr(context_rows, cache_name) # get chache
-    else:
-        agg_vars = vfield.aggregate = Storage(vfield.aggregate) # convert to Storage
-        # if hasattr(vfield, 'required_joins'):
-        #     agg_vars.select_kwargs.setdefault('left', vfield.required_joins)
-        agg_vars.setdefault('groupby', db[vfield.tablename]._id)
-        groupby = agg_vars.groupby
-
-        ids = context_rows.column(groupby)
-        query = groupby.belongs( set(ids) )
-
-        # ordinary select
-        # rows_4grouping = db(  query ).select(groupby,  *agg_vars.required_expressions,
-        #                                                                 **agg_vars.select__kwargs)
-
-
-        # DalView with translator
-        translator = agg_vars.translator # or use global
-        selection = DalView(groupby,  *agg_vars.required_expressions,
-                            translator=translator, query=query, **agg_vars.select__kwargs)
-
-        rows_4grouping = selection.execute()
-
-        grouped = rows_4grouping.group_by_value(groupby)
-        setattr(context_rows, cache_name,  grouped) # set cache
-
-    return grouped
-
-
-def select_with_virtuals(dbset, *columns,  **kwargs):
-    """columns can be instance of Expression, Field, Field.Virtual
-
-    acts similary as SQLFORM.grid, but returns Rows object.
-    in the result: records are remapped according to columns,
-    but rawrows and colnames stay as they are in the select...
-
-    nonshown can indicate which columns to select (for virtuals) but exclude from result
-    ps.: in SQLFORM.grid this is done with readable.False
-
-    Example:
-        Table A: f1, f2, vf3_agg (aggregate:required_expressions: B.id)
-        Table B: f1, vf2(required_expressions: A.f1), f3
-
-    columns = [ B.f1, B.vf2,  B.f3*3 ]
-    -->
-    virtual: [ B.vf2 ]
-    selectable: [ B.f1, B.f3*3, A.f1 ]
-    nonshown: [ A.f1 ]
-
-    """
-
-    selectable = []
-    virtual = [];    joins = []
-    nonshown = kwargs.pop('nonshown', [])[:]  # used by virtual, but not included in result
-
-
-    ### init: assign what is where
-    for col in columns:
-        if isinstance(col, Field.Virtual):
-            if col not in virtual:
-                virtual.append( col )
-
-                if getattr(col, 'aggregate', None):
-                    continue  # skip aggregateble vfields
-
-                # look for dependances
-                for required_expr in getattr(col, 'required_expressions', []):
-                    if required_expr not in nonshown:
-                        nonshown.append( required_expr )
-                required_joins = getattr(col, 'required_joins', [])
-                if required_joins:
-                    # todo: maybe prevent duplication of joined tables: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
-                    joins.extend(  required_joins )
-        else:
-            selectable.append( col )
-
-    # make sure nonshown items doesn't appear in columns
-    nonshown = set(nonshown).difference(columns)
-
-
-    # more stuff to nonshow:    #  if not f.readable
-    if kwargs.get('nonreadable_as_nonshown', False):
-        nonreadable =   set ( f for f in columns if not f.readable)
-        nonshown .update( nonreadable )
-        columns = [  f for f in columns if f.readable ] # overrides original columns!
-
-    nonshown = list(nonshown)
-
-    # do SELECT  -- get data rows
-    if joins:
-        kwargs.setdefault('left', []).extend(  joins )
-
-
-    translator= kwargs.pop('translator', None)
-    selection = DalView( *(selectable+nonshown), translator=translator, query=dbset().query,  **kwargs )
-    rows = selection.execute()
-
-    # rows = dbset().select(*(selectable+nonshown), **kwargs)  # standart select
-
-
-    # remap to resulting fields
-    tmp_compact, rows.compact = rows.compact, False
-    for row in rows:
-        # add virtual fields
-        # this expects virtualfields to have tablename  (or could use tablenames_4_virtualfields)
-        # https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2862
-        for field in virtual:
-            if isinstance(field, Field.Virtual) and field.tablename in row:
-
-                    if hasattr(field, 'aggregate'): # aggregate virtuals always do extra join now (though they might reuse exixting rows (if all of them are selecteed))
-                        id_field = field.aggregate['groupby']
-                        group_id = row[id_field]
-                        rows_4_aggregate = agg_list_singleton(vfield=field, context_rows=rows)
-                        group = rows_4_aggregate[group_id]
-                        field.f = lambda r: field.aggregate.f(r, group) # is not called directly
-                        row[field.tablename][field.name] = field.aggregate.f(row, group)
-
-                    else:
-                        # execute virtual function
-                        value = row[field.tablename][field.name]
-                        row[field.tablename][field.name] = value # this replaces call with value
-                        # except KeyError:
-                        #     value = dbset.db[field.tablename] [row[field.tablename][field_id]]  [field.name]
-
-
-        # remove nonshown fields/expressions
-        for field in nonshown:
-            del row[field.tablename][field.name]
-            # if len(row[field.tablename]) == 0:
-            if not row[field.tablename]:
-                del row[field.tablename]
-
-    rows.compact = tmp_compact
-
-    # rows.colnames = rows.colnames[:]
-    # for field in nonshown:
-    #     rows.colnames.remove(str(field))
-    rows.rawcolnames = rows.colnames
-    rows.colnames = [str(col) for col in columns]
-
-
-    return rows
-
-    def tablenames_4_virtualfields():
-        db = dbset
-        left = kwargs.get('left', [])
-        fields = columns
-
-        # taken from SQLFORM.grid https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2326
-        tablenames = db._adapter.tables(dbset.query)
-        if left is not None:
-            if not isinstance(left, (list, tuple)):
-                left = [left]
-            for join in left:
-                tablenames += db._adapter.tables(join)
-        tables = [db[tablename] for tablename in tablenames]
-        if fields:
-            # add missing tablename to virtual fields
-            for table in tables:
-                for k, f in table.iteritems():
-                    if isinstance(f, Field.Virtual):
-                        f.tablename = table._tablename
-            columns = [f for f in fields if f.tablename in tablenames]
 
 
 
@@ -786,9 +605,9 @@ def test_24_virtual_field():
     #     db.A.f1.readable = False
     #     return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
 
-    # return select_with_virtuals(db(db.B))
 
-    return select_with_virtuals(db, *columns) #.as_json()
+    return grand_select(*columns) # same as  select_with_virtuals(db, *columns) #.as_json()
+
     # return select_with_virtuals(db, *columns, left=db.A.on(db.A.id==db.B.id)) #.as_json()
     # return db().select(db.demo.ALL)
 
@@ -840,14 +659,16 @@ def test_26_virtual_field_Aggregate():
     #     db.A.f1.readable = False
     #     return SQLFORM.grid(db.B, fields=columns[:2]+[db.A.f1], left=db.A.on(db.A.id==db.B.id) )
 
-    rows = select_with_virtuals(db, *columns
-                                # , groupby=db.A.id
-                                , translator = gt
-                                , left=left
-                                , orderby=db.A.id
-                                , limitby=(0,5)
-
-                                )
+    # rows = select_with_virtuals(
+    rows = grand_select(
+                    *columns
+                    , query = db.A.id > 1
+                    # , groupby=db.A.id
+                    , translator = gt
+                    , left=left
+                    , orderby=db.A.id
+                    , limitby=(0,5)
+                          )
 
     return dict( rows=rows )
 
