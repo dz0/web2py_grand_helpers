@@ -16,33 +16,34 @@ orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 
 def test_fields():
     global TEST_FIELDS
-    TEST_FIELDS = [
+    if not 'TEST_FIELDS' in globals():
+        TEST_FIELDS = [
 
-    db.auth_user.first_name,
-    db.auth_user.email,
+            db.auth_user.first_name,
+            db.auth_user.email,
 
-    db.auth_user.id,
-    db.auth_group.role,  # db.auth_group.description,
+            db.auth_user.id,
+            db.auth_group.role,  # db.auth_group.description,
 
-    FormField(db.auth_permission.table_name, requires=IS_IN_DB(db, db.auth_permission.table_name, multiple=True),
-              comparison='equal'),
-    SearchField(db.auth_permission.id,
-                requires=IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s")),
+            FormField(db.auth_permission.table_name, requires=IS_IN_DB(db, db.auth_permission.table_name, multiple=True),
+                      comparison='equal'),
+            SearchField(db.auth_permission.id,
+                        requires=IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s")),
 
-    # no_table items
-    Field('user_id', type='reference auth_user'),
-    #        FormField('user_id', type='reference auth_user'),
+            # no_table items
+            Field('user_id', type='reference auth_user'),
+            #        FormField('user_id', type='reference auth_user'),
 
-    Field('bla'),
-    #        FormField( 'bla'),
-    #         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
-    #         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
-    #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
-    orphan_with_target,
-    # expression (as target)
-    FormField(db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
-    FormField(Field('pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure'),
-]
+            Field('bla'),
+            #        FormField( 'bla'),
+            #         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
+            #         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
+            #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
+            orphan_with_target,
+            # expression (as target)
+            FormField(db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
+            FormField(Field('pure_inputname_in_form'), name_extension='', prepend_tablename=False, target_expression='pure'),
+        ]
     return TEST_FIELDS
 
 test_fields()
@@ -101,7 +102,7 @@ def test_22_dalview_search():
     filter = form.build_queries()
     query_data = form.vars_as_Row()
 
-    cols = get_expressions_from_formfields(fields)
+    cols = get_expressions_from_formfields(fields, include_orphans=False ) # for 27 should change to True
     print "dbg cols", cols
 
     selection = DalView(*cols, query=filter.query, having=filter.having,
@@ -125,9 +126,11 @@ def test_22_dalview_search():
             )    
 
 test_dalview_search = test_22_dalview_search
-def test_27_dalview_search_VirtualField():
-    f = TEST_FIELDS[0] = Field.Virtual( "virtual", label='Virtualus', f=lambda row: "bla")
-    f.table = f._table = db.auth_user
+def test_27_virtual_field_dalview_search_TODO_orNotTODO():
+    vf = db.auth_user.vf = TEST_FIELDS[0] = Field.Virtual( "virtual", label='Virtualus', f=lambda row: "bla", table_name='auth_user')
+    vf.table = vf._table = db.auth_user
+
+
     return test_dalview_search()
 
 
@@ -169,6 +172,7 @@ def test_30_grandtranslator_expressions():
 
     tests = [
         db.auth_user.first_name,  # Field
+        db.auth_user.last_name,  # Field - nontranslated
         db.auth_user.first_name + db.auth_user.last_name, # Flat Expression - 1 tranlsation
         db.auth_user.first_name + db.auth_group.role, # Flat Expression - 2 translations
         db.auth_user.first_name.contains('s'),  # Flat Query
@@ -377,7 +381,7 @@ def test_47_grandregister():
                               # search_fields=search_fields,  use_grand_search_form=False  # default tries SOLIDFORM
                               # search_fields = search_fields_structured,  # for SOLIDFORM         # search_fields = [ search_fields ],
                              , filters = fast_filters
-                             , formstyle =  None
+                             , formstyle =  None  or 'table3cols' # divs table2cols table3cols
                              , **kwargs  # SEARCH FIELDS, etc
                              )
     register.render()
@@ -388,6 +392,9 @@ def test_42_grandregister_with_just_SQLFORM():
     use_grand_search_form = False
     test_grandregister()
 
+
+def test_60_grandselect_subjects():
+    pass
 
 # @auth.requires_permission('list', 'subject_subject')
 def test_60_granderp_subjects():
@@ -611,12 +618,24 @@ def test_24_virtual_field():
     # return select_with_virtuals(db, *columns, left=db.A.on(db.A.id==db.B.id)) #.as_json()
     # return db().select(db.demo.ALL)
 
-def test_25_virtual_field_Represent_TODO():
-    rows = test_24_virtual_field()
+def test_25_virtual_field_Represent():
+
+    init_tables_AB()
+    columns = [db.B.f1, db.B.vf2, db.A.f2 + 'bla']  # Field, Field.Virtual, Expression
+
+    db.B.vf2.represent = lambda value: STRONG(value) # virtual field
+    # need to inject representation in virutal field function directly
+    vfunction = db.B.vf2.f  # to prevent recursive definition ;)
+    db.B.vf2.f = lambda row: db.B.vf2.represent( vfunction(row)  )
+
+    rows =  grand_select(*columns)
+
+    db.B.f1.represent = lambda value: STRONG(value)  # ordinary field representation can be given even after selection
+
     rows.render()
     return rows
 
-def test_26_virtual_field_Aggregate():
+def test_26_virtual_field_Aggregate__grand_select():
     """
         Example:
         Table A: f1, f2, vf3_agg(Aggregate list A)

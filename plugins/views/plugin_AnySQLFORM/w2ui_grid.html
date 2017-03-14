@@ -67,7 +67,10 @@
 
 
 {{ block after_grid }} 
-{{if request.env.http_host.startswith('localhost'):
-    =response.toolbar()
-pass}}
+{{
+    host = request.env.http_host
+    if host.startswith('localhost') or host.startswith('127.0.0.1') or host.startswith('0.0.0.0'):
+        =response.toolbar()
+    pass
+}}
 {{ end }}
