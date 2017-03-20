@@ -11,7 +11,7 @@
 
                     sortData: {{=XML(simplejson.dumps(w2ui_sort,  default=custom_json, indent=4)) }},
             
-            {{ block w2ui_grid_actions }} 
+            {{ block w2ui_grid_options }}
 
                     show: {
                         {{ if auth.has_permission('add', data_name ): }}
@@ -24,31 +24,53 @@
                             toolbarDelete: true,
                         {{ pass }}
                     },
+
+
+                    extra_toolbar: {
+                        items: [
+                            {{ if auth.has_permission('add', data_name): }}
+                                {type: 'button', id: 'import', caption: "{{ =T('button__import') }}", img: 'icon-page'},
+                                {type: "break"},
+                                // {type: "button", caption: "{{ =T('subject_subject__btn_quick_add') }}", icon: "w2ui-icon-plus", onClick: addSubject}
+                            {{ pass }}
                     
+                        ]
+                    },
+
+
                     onAdd: function(event){
                         // addUser();
-                        //ajaxForm_popup(popup_name, title, form_name, url, data, options)
-                        {{ context_name = data_name or table_name or cid }}
-                        ajaxForm_popup(  
+                        //ajaxForm_popup(popup_name, title, form_name, url,  data, options)
+                        ajaxForm_popup(
                                       "{{ =data_name }}", 
-                                      "{{ =T( context_name +'__add_form' ) }}",
+                                      "{{ =T( data_name +'__add_form' ) }}", // or  context_name: {{#=context_name}}+ ..?
                                       "add_{{ =data_name }}",
-                                      "{{ =URL(request.controller, 'add_' + data_name) }}"
+                                      "{{ =crud_urls.add }}"
                                        );
                         
                     },
                     onEdit: function(event){
-                        var url = URL({'c': '{{=request.controller}}', 'f': 'edit_'+'{{=data_name}}' , 'args[]': [event.recid]});
+
+                    /* ajaxForm_popup(
+                                      "{{ =data_name }}",
+                                      "{{ =T( data_name +'__edit_form' ) }}", // or  context_name: {{#=context_name}}+ ..?
+                                      "edit_{{ =data_name }}",
+                                      "{{ =crud_urls.edit }}"  +'/'+event.recid
+                                       );
+                    */
+
+                        // var url = "{{=crud_urls.edit   }}" +'/'+event.recid
+                        var url = "{{=crud_urls.edit}}".replace('___id___', ''+event.recid); // to let vars appear in URL
                         if (event.newWindow){
                             openTab(url);
                         } else {
                             document.location = url;
                         }
-                        //, function editTransferGood(rid){
-                            // ajaxForm_popup("good", "{{ =T('warehouse_transfer_good__edit_form') }}", "edit_good",
-                                           // URL({c: "warehouse", f: "edit_transfer_good", "args[]": [rid], user_signature: true}));
-                        // }                
+
                     },
+                    {{ if w2grid_options_extra: 
+                        =w2grid_options_extra
+                    pass }}
                     
             {{ end }}
             
@@ -58,7 +80,7 @@
         w2ui__grid('{{=cid}}');
     });
 
-    {{ block w2ui_js_extra }}
+    {{ block w2ui_extra_js }}
     //  w2ui extra JS
     {{ end }}
     </script>

@@ -80,7 +80,7 @@ class GrandRegister( object ):
     """
     def __init__( self,
                   columns,
-
+                  id_field = None,
                   left_join_chains = None, # probably would be enough
                   search_fields = None,
                   search_fields_update_triggers = None,
@@ -92,12 +92,35 @@ class GrandRegister( object ):
 
         request = current.request
         # for w2ui_grid response_view
-        self.cid =  kwargs.pop('cid', request.function )
-        self.grid_function =  kwargs.pop('grid_function', request.function)
-        self.data_name =  kwargs.pop('data_name',  request.controller)
+        self.w2ui_kwargs = Storage()
+        self.w2ui_kwargs.cid           = self.cid           =  kwargs.pop('cid', request.function )
+        self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
 
+        self.w2ui_kwargs.table_name    = self.table_name    =  kwargs.pop('table_name',  columns[0]._tablename)
+        self.w2ui_kwargs.data_name     = self.data_name     =  kwargs.pop('data_name',  self.table_name) or request.controller
+        # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
+        self.w2ui_kwargs.crud_urls  = self.crud_urls  =  Storage( kwargs.pop('crud_urls', {} ) )
+        crud_controller =  kwargs.pop('crud_controller', 'external' )
+
+        if crud_controller in ['postback', None]:
+
+            self.crud_urls.setdefault('add', URL(args=['add']))
+            self.crud_urls.setdefault('edit', URL(args=['edit', '___id___'], vars={'view_extension':'html'}))  # todo: use signature?
+
+        else:
+            self.crud_urls.setdefault('add', URL(crud_controller, 'add_' + crud_controller))
+            self.crud_urls.setdefault('edit', URL(crud_controller, 'edit_' + crud_controller, args=['___id___']))
+
+        if  '___id___' not in self.crud_urls.edit:
+            self.crud_urls.edit += '/___id___'  # though we risk in case of vars in URL
+
+        self.w2ui_kwargs.w2grid_options_extra  =  kwargs.pop('w2grid_options_extra', {} )
+
+
+        # ordinary params
 
         self.columns  = columns
+        self.id_field = id_field or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
         # self.search_fields.append( SearchField('grid') )
@@ -167,16 +190,23 @@ class GrandRegister( object ):
         self.w2ui_sort[0].setdefault('direction', "asc")
 
         context = dict(
-            cid = self.cid,
+
             w2ui_columns=self.w2ui_columns,
-            grid_function=self.grid_function,  # or 'users_grid'
-            data_name=self.data_name ,
 
             w2ui_sort=self.w2ui_sort ,  # w2ui_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
-            # table_name
-            **self.kwargs
+
+            # moved to w2ui_kwargs:
+            # cid = self.cid,
+            # table_name =
+            # grid_function=self.grid_function,  # or 'users_grid'
+            # data_name=self.data_name ,
+            **self.w2ui_kwargs   # **self.kwargs
+
             # ,dbg = response.toolbar()
         )
+
+        context.update(self.kwargs)
+
         return context
 
     def form(self):
@@ -217,6 +247,26 @@ class GrandRegister( object ):
             # raise HTTP( 200,  response.render("generic.json", result) )
             raise HTTP( 200,  response.json( result ) )
 
+        elif request.args(0) in ['add', 'edit']:  # default CRUD actions
+            action = request.args(0)
+            table = self.id_field.table
+            if action=='add':
+                form = SQLFORM(table)
+                form.process()
+                raise HTTP(200, form=form)  # for ajax request
+            if action=='edit':
+                view_extension = request.vars.view_extension
+                record = table(request.args(1)) # or redirect(..)
+                form = SQLFORM( table , record )
+                form.process()
+
+                raise HTTP(200, response.render('core/base_form.html', dict(form=form, row_buttons=None))) # for full request
+            # if form.process().accepted:
+            #     response.flash = 'form accepted'
+            # elif form.errors:
+            #     response.flash = 'form has errors'
+
+
         else:
             raise HTTP(200, response.render(self.response_view, self.form() ) )
 
@@ -252,7 +302,7 @@ class GrandRegister( object ):
         
         # self.selection = DalView(
         rows = grand_select( 
-                        *self.columns, 
+                        self.id_field, *self.columns,
                         query=filter.query, having=filter.having,
 
                          left_join_chains=self.left_join_chains,
@@ -295,6 +345,7 @@ class GrandRegister( object ):
                                 for table, fields in row.items()     for field, val in fields.items()  }
                           for row in rows_as_list ]
             flat_rows = flatten(rows)
+
             # flat_rows.sql_log = rows.sql_log
             # flat_rows.sql_nontranslated_log = rows.sql_nontranslated_log
             # rows.compact = _compact
@@ -318,8 +369,12 @@ class GrandRegister( object ):
         map_colnames_2_w2ui = dict( zip(self.colnames, self.w2ui_colnames ) )
 
         records =  [ ]
+
+        id_field_str = str(self.id_field) # add w2ui recID
+
         for row in rows:
             r = {  map_colnames_2_w2ui[colname]:  row[ colname ]       for colname in self.colnames }
+            r['recid'] = row[id_field_str]
             records.append( r )
 
 

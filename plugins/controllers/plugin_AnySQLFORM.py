@@ -393,7 +393,18 @@ def test_42_grandregister_with_just_SQLFORM():
     test_grandregister()
 
 
-def test_60_grandselect_subjects():
+
+def test_60_subjects_country_joins_chain():
+    join_expr = build_joins_chain( db.subject_subject, db.subject_address,  db.address_address, db.address_country )
+    # print join_expr
+    # rows = db().select(db.subject_subject.title,  db.address_country.title, left=join_expr, limitby=(0,30))
+    rows = grand_select(db.subject_subject.title,  db.address_country.title, left=join_expr, limitby=(0,30))
+
+    return dict( rows=rows, sql=db._lastsql, dbg=response.toolbar() )
+    # join_expr= build_joins_chain( db.subject_subject, db.subject_address, db.address_address, db.address_country)
+    # return str(join_expr)
+
+def test_60_grand_select_subjects():
     pass
 
 # @auth.requires_permission('list', 'subject_subject')
@@ -409,13 +420,16 @@ def test_60_granderp_subjects():
             filters.append({'label': l, 'data': {'classes[]': c}})
         db.subject_subject.type.default = None
 
+        # classes = FormField('classes[]', requires=IS_IN_SET(SUBJECT_CLASSES, multiple=True),
+        #                label=T('subject_subject__classes'),  target_expression=db.subject_subject.classes)
+        classes = FormField(db.subject_subject.classes, name='classes[]', requires=IS_IN_SET(SUBJECT_CLASSES, multiple=True))
+
         search_fields =  [
                 [db.subject_subject.title,
                  Field('manager_ids[]', label=T('subject_subject__manager'),
                        requires=IS_IN_SET(allowed_managers(db, auth), multiple=True))],
 
-                [Field('classes[]', requires=IS_IN_SET(SUBJECT_CLASSES, multiple=True),
-                       label=T('subject_subject__classes')),
+                [classes,
                  db.subject_subject.rating_id],
 
                 [db.subject_subject.type, db.address_address.country_id],
@@ -425,17 +439,23 @@ def test_60_granderp_subjects():
             ]
 
 
-        f = db.subject_subject.contact_id
+
+        f = db.subject_subject.contact_id   # virtual field with required_expressions
         f.tablename = f._tablename = "subject_subject"
+        f.required_expressions = [db.subject_subject.id]
+
         cols = [
             db.subject_subject.title,
+            db.subject_subject.type,
+            db.subject_subject.classes,
             db.subject_subject.contact_id, # Virtual
             # db.subject_subject.address_id, # Virtual
 
 
             db.subject_subject.activity_id,
             # Field('subject_subject__main_note', label=T('subject_subject__main_note')),
-            db.address_address.country_id,
+            # db.address_address.country_id,
+            db.address_country.title,
             # db.subject_subject.website,
             db.subject_subject.pay_term,
             # db.subject_subject.credit_bank_id,
@@ -445,14 +465,21 @@ def test_60_granderp_subjects():
                                  cid=cid,
                                  table_name='subject_subject',
 
-                                 # left_join_chains=[
-                                 #     [db.auth_user, db.auth_membership, db.auth_group, db.auth_permission]
-                                 # ],
+                                 left_join_chains=[
+                                     [db.subject_subject, db.subject_address, db.address_address, db.address_country]
+                                 ],
                                  search_fields = search_fields,
-                                 filters=filters, # fast filters
+                                 filters=filters # fast filters
                                  # translator=gt
 
-                                formstyle =  None #'divs' if IS_MOBILE else None,
+                                 # , crud_urls = {'add': URL('subject', 'add_subject'),
+                                 #               #'edit': URL('subject', 'edit_subject')
+                                 #              }
+                                 # , crud_controller = None # 'subject' # or None for postback
+
+                                 , crud_controller =  'subject' # or None for postback with default SQLFORM() behaviour
+
+                                ,formstyle =  None #'divs' if IS_MOBILE else None,
                                 # _class = 'mobile_sqlform' if IS_MOBILE else None,
                                  )
         register.render()
