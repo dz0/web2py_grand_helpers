@@ -73,7 +73,9 @@ def db_reference_map():
     # should be used as singleton -- might cache or store in session?
     # but invalidated or updated on table alias!  (after db.tablenames.append( tablename ))
     db = gluon_current.db
-    return{ x: find_references_and_fkeys(x) for x in db.tables }
+    session = gluon_current.session
+    session.graph_model_data  = session.graph_model_data  or  { x: find_references_and_fkeys(x) for x in db.tables }
+    return session.graph_model_data
      
  
     
