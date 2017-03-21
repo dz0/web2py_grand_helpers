@@ -11,6 +11,8 @@ current.dev_limitby = 0, 20
 current.DBG = True
 
 # fake admin
-auth.has_permission= lambda *args, **kwargs: True
-from gluon.storage import Storage
-auth.user=Storage( language_id = 1 )
+if False:
+    auth.has_permission= lambda *args, **kwargs: True
+    from gluon.storage import Storage
+    # auth.user= Storage( language_id = 1 )
+    auth.user=db.auth_user(1) # Storage( language_id = 1 )

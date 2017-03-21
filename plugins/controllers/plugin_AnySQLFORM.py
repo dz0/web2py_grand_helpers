@@ -408,7 +408,7 @@ def test_60_grand_select_subjects():
     pass
 
 # @auth.requires_permission('list', 'subject_subject')
-def test_60_granderp_subjects():
+def test_62_granderp_subjects():
         from lib.branch import allowed_managers, allowed_subjects_query, is_branch_allowed
 
         response.subtitle = T('subject_subject__list_form')
@@ -496,6 +496,103 @@ def test_60_granderp_subjects():
         # )
         #
         # return {'cid': cid, 'form': form}
+
+
+def test_63a_good_group_Translation():
+    gt = GrandTranslator(
+        fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
+        language_id=2
+    )
+    target = db.good_group.title
+    return UL( DalView(target, translator=gt).execute().column(target) )
+
+def test_63_granderp_good_goods():
+
+    gt = GrandTranslator(
+        fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
+        language_id=2
+    )
+    gt = None
+
+    cid = 'goods'
+
+    group_ids_validator = None
+
+    # group_ids_validator=IS_IN_SET(
+    #                         translated_set(db, auth, 'good_group', query=(db.good_group.active == True)),
+    #                         multiple=True)
+
+    # db.good_group._common_filter = lambda q: q& db.good_group.active == True
+    group_ids_validator=T_IS_IN_DB( gt,
+                                    db(db.good_group.active == True), db.good_group.id, db.good_group._format,  multiple=True)
+
+    group_ids = SearchField('group_ids', label=db.good.group_id.label,
+                    requires=group_ids_validator,
+
+                    target_expression = db.good.group_id,
+                    comparison = 'belongs',
+                    name_extension = ''
+    )
+    # group_ids.requires=group_ids_validator
+    # group_ids  = SearchField(group_ids, target_expression=db.good.group_id)
+
+
+    search_fields = [
+        [db.good.type, db.good.title],
+
+        # todo
+        [ group_ids,
+         # db.good.group_id,
+
+         db.good.sku],
+        [Field('category_ids[]', label=db.good.category_id.label,
+               requires=IS_IN_SET(translated_set(db, auth, 'good_category', query=(db.good_category.active == True)),
+                                  multiple=True)),
+
+         Field('produced', label=db.good.produced.label, requires=IS_IN_SET(
+             [('T', T('core__yes')), ('F', T('core__no'))]))],
+        [Field('collection_ids[]', label=T('good_group__collections'),
+               requires=IS_IN_SET(
+                   translated_set(db, auth, 'good_collection', query=(db.good_collection.active == True)),
+                   multiple=True))]
+    ]
+
+        # hidden={'goods_autocomplete_title': URL('good', 'autocomplete_good_titles.json'),
+        #         'goods_autocomplete_sku': URL('good', 'autocomplete_good_skus.json')},
+        # table_name='good'
+
+    # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
+    cols=[
+        db.good.category_id,
+        db.good.group_id,
+        db.good.sku,
+        db.good.title,
+        db.good.measurement_id,
+        db.good.cost, # render: 'number:2'
+    ]
+    db.good.cost.w2ui = dict(render='number:2')
+
+    # translator =
+
+    register = GrandRegister(cols,
+                             cid=cid,
+                             table_name='good',
+                             search_fields=search_fields,
+
+                             w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+
+                             # filters=filters  # fast filters
+                             # ,
+                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+
+                             , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
+
+                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             # _class = 'mobile_sqlform' if IS_MOBILE else None,
+
+                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             )
+    register.render()
 
 
 def test_70_group_by_val():
@@ -614,7 +711,8 @@ class FieldVirtual_Aggregate(Field.Virtual):
     #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
 
 
-
+def dbg():
+    return dict(dbg=response.toolbar())
 
 
 def test_24_virtual_field():

@@ -33,6 +33,14 @@
                                 {type: "break"},
                                 // {type: "button", caption: "{{ =T('subject_subject__btn_quick_add') }}", icon: "w2ui-icon-plus", onClick: addSubject}
                             {{ pass }}
+
+                            {{ if w2grid_options_extra_toolbar_extra:
+                                 for item in w2grid_options_extra_toolbar_extra:
+                                   =item
+                                   =', '
+                            pass 
+                            pass 
+                            }}
                     
                         ]
                     },

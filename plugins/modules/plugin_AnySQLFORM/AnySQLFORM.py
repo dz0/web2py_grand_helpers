@@ -495,7 +495,15 @@ class SearchField( FormField ):
         self.init_comparison_and_name_extension( field, kwargs )
 
         if self.name_extension: # we could give      name_extension = ''  (in kwargs), so it is not appended
-            new_name += '__'+self.name_extension  
+            new_name += '__'+self.name_extension
+
+        # few special cases -- for
+        if self.comparison == 'belongs' :  # in input: multiple=True
+            if not new_name.endswith('[]'):
+                new_name += '[]'
+
+        if '[]' in new_name: # in case [] was given before extension...
+            new_name = new_name.replace('[]', '')+'[]'
 
         return new_name
         
@@ -596,13 +604,20 @@ class QuerySQLFORM (AnySQLFORM ):
 
     def set_default_validator(self, f):
 
+        override = getattr(f, 'validator_override', False)
+        if f.requires and f.requires != DEFAULT and override==False:  # do not override if sth set...
+            return
+
         db = current.db  # todo: for Reactive form should be prefiltered dbset
         target = f.target_expression  # for brevity
 
         if f.type.startswith('reference '):
         # or f.type.startswith('list:reference '):
             foreign_table = f.type.split()[1]
-            f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
+            kwargs = dict(multiple=True)   if f.comparison == 'belongs' else {}
+
+            f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, **kwargs)
+
 
         elif f.type in ('string', 'text'):
             if isinstance(target, Field):

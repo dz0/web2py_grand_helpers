@@ -6,6 +6,9 @@ from gluon.html import URL, A, CAT, DIV, BEAUTIFY, PRE
 
 from DalView import *
 from GrandTranslator import *
+# from pydal._globals import DEFAULT
+
+from helpers import get_fields_from_table_format, save_DAL_log
 
 def get_grid_kwargs(self):
         return "TODO"
@@ -95,12 +98,15 @@ class GrandRegister( object ):
         self.w2ui_kwargs = Storage()
         self.w2ui_kwargs.cid           = self.cid           =  kwargs.pop('cid', request.function )
         self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
+        self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  kwargs.pop('w2ui_sort', None)
+        self.w2ui_kwargs.w2grid_options_extra_toolbar_extra =  kwargs.pop('w2grid_options_extra_toolbar_extra', None)
 
         self.w2ui_kwargs.table_name    = self.table_name    =  kwargs.pop('table_name',  columns[0]._tablename)
         self.w2ui_kwargs.data_name     = self.data_name     =  kwargs.pop('data_name',  self.table_name) or request.controller
         # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
         self.w2ui_kwargs.crud_urls  = self.crud_urls  =  Storage( kwargs.pop('crud_urls', {} ) )
         crud_controller =  kwargs.pop('crud_controller', 'external' )
+
 
         if crud_controller in ['postback', None]:
 
@@ -177,23 +183,35 @@ class GrandRegister( object ):
         # response.subtitle = "test  w2ui_grid"
         # response.menu = response.menu or []
 
-        self.w2ui_columns = [
-                             {'field': FormField(f).name, 'caption': f.label, 'size': "100%",
-                              'sortable': isinstance(f, (Field, Expression)), 'resizable': True}
-                             for f in self.columns
-                             ]
+        self.w2ui_columns = []
+        for f in self.columns:
+            w2ui_col =  {
+                      'field': FormField(f).name, 'caption': f.label,
+                      'size': "100%",
+                      'sortable': isinstance(f, (Field, Expression)),
+                      'resizable': True
+                      }
+
+            if hasattr(f, 'w2ui'):
+                w2ui_col.update(f.w2ui)
+
+            self.w2ui_columns.append( w2ui_col )
+
+
         self.w2ui_colnames = [d['field'] for d in self.w2ui_columns]  # parallely alligned to columns
         self.colnames = [ str(col) for col in self.columns ]          # parallely alligned to columns
 
         if getattr(self, 'w2ui_sort', None) is None:
             self.w2ui_sort = [{'field': self.w2ui_colnames[0] }]
-        self.w2ui_sort[0].setdefault('direction', "asc")
+
+        for sorter in self.w2ui_sort:
+            sorter.setdefault('direction', "asc")
 
         context = dict(
 
             w2ui_columns=self.w2ui_columns,
 
-            w2ui_sort=self.w2ui_sort ,  # w2ui_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
+            # w2ui_sort=self.w2ui_sort ,  # w2ui_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
 
             # moved to w2ui_kwargs:
             # cid = self.cid,
@@ -245,6 +263,9 @@ class GrandRegister( object ):
             # return json(dict(status='success', records = rows ))
             # from gluon.serializers import json
             # raise HTTP( 200,  response.render("generic.json", result) )
+            if getattr(current.DBG, False):
+                save_DAL_log()
+
             raise HTTP( 200,  response.json( result ) )
 
         elif request.args(0) in ['add', 'edit']:  # default CRUD actions
@@ -269,6 +290,7 @@ class GrandRegister( object ):
 
         else:
             raise HTTP(200, response.render(self.response_view, self.form() ) )
+            # return  response.render(self.response_view, self.form() ) # ?
 
 
     # def search_filter(self):
@@ -412,9 +434,19 @@ class GrandSQLFORM(QuerySQLFORM):
 
     def set_default_validator(self, f):
 
+        override = getattr(f, 'validator_override', True) or getattr(f, 'use_default_IS_IN_DB', True)
+
+        if override==False:  # do not override
+            return
+
         if not self.translator:
             QuerySQLFORM.set_default_validator(self, f)
             return
+
+        if self.translator.is_validator_translated(f.requires):  # if already translated
+            return
+
+
 
         db = current.db  # todo: for Reactive form should be prefiltered dbset
         target = f.target_expression  # for brevity
@@ -424,11 +456,18 @@ class GrandSQLFORM(QuerySQLFORM):
                 foreign_table = f.type.split()[1]
                 foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
                 # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
-                f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], db[foreign_table]._format)
+
+                kwargs = dict(multiple=True) if f.comparison == 'belongs' else {}
+                format = db[foreign_table]._format
+                fields_in_format =  get_fields_from_table_format(format)
+                if set(fields_in_format ) & set(self.translator.fields): # if there are translatable fields in format
+                    f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], format, **kwargs)
 
 
-        elif f.type in ('string', 'text'):
-            if isinstance(target, Field):
+        elif f.type in ('string', 'text'): # maybe also number type? or list:string
+            if   isinstance(target, Field) \
+            and  target in self.translator.fields:  # look if field needs to be translated
+
                 if f.comparison == 'equal':
                     f.requires = T_IS_IN_DB(self.translator, db, target)
 
@@ -443,12 +482,15 @@ class GrandSQLFORM(QuerySQLFORM):
                         # , id_field=db.category.id
                     )
 
-            if type(target) is Expression and f.comparison == 'equal':
+            if type(target) is Expression and f.comparison  in ['equal', 'belongs']:
             # should work for Field and Expression targets
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)
                 theset = DalView(target, translator=self.translator).execute().column(target)
-                f.requires = IS_IN_SET(theset)
+
+                kwargs = dict(multiple=True) if f.comparison == 'belongs' else {}
+
+                f.requires = IS_IN_SET(theset, **kwargs)
 
 
         else:

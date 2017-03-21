@@ -6,6 +6,17 @@ from pydal.objects import SQLALL, Query
 
 from DalView import DalView
 
+
+# for Validator with translator
+from gluon.validators import IS_IN_DB
+from pydal.objects import Field, FieldVirtual, FieldMethod
+from gluon.sqlhtml import AutocompleteWidget
+from gluon.html import OPTION, SELECT
+
+
+
+
+
 class GrandTranslator():
     def __init__(self, fields, language_id=None):
         db = self.db = current.db
@@ -13,11 +24,14 @@ class GrandTranslator():
         # self.db_adapter = self.db._adapter
 
 
-        if not language_id and auth.is_logged_in():
-                language_id = auth.user.language_id
-
         if not language_id:
-            raise RuntimeError("No language defined for translating")
+            if auth.is_logged_in():
+                language_id = auth.user.language_id
+            else:
+                try:
+                    language_id = db(db.language.main == True).select().first().id
+                except:
+                    raise RuntimeError("No language defined for translating")
 
         self.language_id = language_id
 
@@ -75,11 +89,21 @@ class GrandTranslator():
         return joins
 
     def is_translation(self, expr):
+        '''see is_expression_translated'''
         return (
               hasattr(expr, 'op') and expr.op is expr.db._adapter.COALESCE
               and isinstance(expr.second, Field)
               and str(expr.first) in [self.translation_alias(expr.second) + '.value', 'translation_field.value']
             )
+
+    def is_expression_translated(self,expr):  # for more consice API
+        return self.is_translation(expr)
+
+    def is_validator_translated(self, validator):
+        return isinstance(validator, T_IS_IN_DB)
+
+    def is_widget_translated(self, widget):
+        return isinstance(widget, T_AutocompleteWidget)
 
     def translate(self, expression ):
         """Traverse Expression (or Query) tree and   decorate  fields with COALESCE translations
@@ -151,10 +175,6 @@ class GrandTranslator():
 
 
 # Validator with translator
-from gluon.validators import IS_IN_DB
-from pydal.objects import Field, FieldVirtual, FieldMethod
-from gluon.sqlhtml import AutocompleteWidget
-from gluon.html import OPTION, SELECT
 
 class T_AutocompleteWidget( AutocompleteWidget ):
     def __init__( self, translator, *args, **kwargs):
