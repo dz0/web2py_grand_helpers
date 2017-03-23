@@ -263,7 +263,7 @@ class GrandRegister( object ):
             # return json(dict(status='success', records = rows ))
             # from gluon.serializers import json
             # raise HTTP( 200,  response.render("generic.json", result) )
-            if getattr(current.DBG, False):
+            if getattr(current, 'DBG', False):
                 save_DAL_log()
 
             raise HTTP( 200,  response.json( result ) )
@@ -332,13 +332,8 @@ class GrandRegister( object ):
                          **self.kwargs # translator inside
                          )
         
-        if current.DBG:
-            def tidy_SQL(sql):
-                for w in 'from left inner where'.upper().split():
-                    sql = sql.replace(w, '\n'+w)
-                sql = sql.replace('AND', '\n      AND')
-                return PRE(sql)
-                    
+        if hasattr(current, 'DBG') and current.DBG:
+            from helpers import tidy_SQL
             current.session.sql_log = map(tidy_SQL, rows.sql_log)
         # current.session.sql_nontranslated_log = map(tidy_SQL, rows.sql_nontranslated_log)
         
@@ -350,10 +345,20 @@ class GrandRegister( object ):
         self.w2ui_grid_init()
 
         # in real usecase - we want to RENDER first
-        def rows_rendered_flattened(rows):
+        def rows_rendered_flattened(rows, fk_fields_leave_int=True):
+            if not rows: return # if empty
             colnames = rows.colnames
             # _compact = rows.compact
             rows.compact = False
+
+            if fk_fields_leave_int:  # don't render references, as this would result in lots of single item requests
+                for table in rows[0]:   # TODO: not tested
+                    if table != '_extra':
+                        for f in db[table].fields:
+                            type_ref_indicator = f.type.split()[0]
+                            if type_ref_indicator in ['reference', 'list:reference']:
+                                f.represent = None
+
             rows = rows.render()  # apply represent methods
 
             # TODO: maybe better use rawrows ?

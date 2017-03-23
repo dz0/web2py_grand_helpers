@@ -2,6 +2,7 @@ from gluon.storage import Storage
 from gluon import current
 from pydal.objects import Field, Row, Expression
 
+from helpers import extend_with_unique, append_unique
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -89,11 +90,7 @@ SELECT_ARGS = (
      'having', 'join', 'for_update', 'processor', 'cacheable',
      'orderby_on_limitby','outer_scoped')
 
-def extend_with_unique(A, B):
-    """extends list A with distinct items from B, which were not present in A"""
-    for b in B:
-        if  str(b) not in map(str, A):
-            A.append(b)
+
 
 class DalView(Storage):
     """similar as DB set, but "packs" query into kwargs 
@@ -337,6 +334,8 @@ def select_with_virtuals(*columns,  **kwargs):
     nonshown: [ A.f1 ]
 
     """
+    delete_nonshown = kwargs.pop('delete_nonshown', True)
+
     dbset = kwargs.pop('dbset', None)
     if dbset is None:
         dbset = current.db
@@ -350,6 +349,7 @@ def select_with_virtuals(*columns,  **kwargs):
     
     if not columns:
         columns = kwargs.pop('columns')
+
 
     selectable = []
     virtual = [];    joins = []
@@ -367,11 +367,12 @@ def select_with_virtuals(*columns,  **kwargs):
 
                 # look for dependances
                 for required_expr in getattr(col, 'required_expressions', []):
-                    if required_expr not in nonshown:
-                        nonshown.append( required_expr )
+                    # if required_expr not in nonshown:
+                        # nonshown.append( required_expr )
+                    append_unique(nonshown, required_expr )
                 required_joins = getattr(col, 'required_joins', [])
                 if required_joins:
-                    # todo: maybe prevent duplication of joined tables: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
+                    # todo: maybe extend_with_unique: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
                     joins.extend(  required_joins )
         else:
             selectable.append( col )
@@ -438,11 +439,12 @@ def select_with_virtuals(*columns,  **kwargs):
 
 
         # remove nonshown fields/expressions
-        for field in nonshown:
-            del row[field.tablename][field.name]
-            # if len(row[field.tablename]) == 0:
-            if not row[field.tablename]:
-                del row[field.tablename]
+        if delete_nonshown:
+            for field in nonshown:
+                del row[field.tablename][field.name]
+                # if len(row[field.tablename]) == 0:
+                if not row[field.tablename]:
+                    del row[field.tablename]
         
         first_row = False  # first row finished 
         

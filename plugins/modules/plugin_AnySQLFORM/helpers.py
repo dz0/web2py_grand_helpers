@@ -9,18 +9,69 @@ def get_fields_from_table_format(format_str):
     return results
 
 
+def extend_with_unique(A, B):
+    """extends list A with distinct items from B, which were not present in A
+    for Expression instances one needs to use str(..) asotherwise  overriden _eq_ understands different fields as same.. :/
+    """
+    for b in B:
+        if  str(b) not in map(str, A):
+            A.append(b)
+
+def append_unique(A, b):
+    if str(b) not in map(str, A):
+        A.append(b)
+
+
+def make_refs_represent_int(rows):
+    from pydal.helpers.classes import Reference
+    rows.compact=False
+    row = rows[0]
+    for table in row:  # TODO: not tested
+        if table != '_extra':
+            for f, val in row[table].items():
+                # f = getattr(row[table], f)
+                if isinstance( val, Reference):
+                    db[table][f].represent = None
+                    # f = db[table][f]
+                    # type_ref_indicator = f.type.split()[0]
+                    # if type_ref_indicator in ['reference', 'list:reference']:
+                    #   f.represent = None
+
+
+
+from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV
+from gluon.dal import DAL
+
+def tidy_SQL(sql):
+    for w in 'from left inner where'.upper().split():
+        sql = sql.replace(w, '\n' + w)
+    sql = sql.replace('AND', '\n      AND')
+    return PRE(sql)
+
 def save_DAL_log(file='/tmp/web2py_sql.log.html'):
-    from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY
-    from gluon.dal import DAL
     dbstats = []
     dbtables = {}
     infos = DAL.get_instances()
     for k, v in infos.iteritems():
-        dbstats.append(TABLE(*[TR(PRE(row[0]), '%.2fms' % (row[1]*1000))
+        dbstats.append(TABLE(*[TR( tidy_SQL(row[0]), '%.2fms' % (row[1]*1000))
                                for row in v['dbstats']]))
         # dbtables[k] = dict(defined=v['dbtables']['defined'] or '[no defined tables]',
                            # lazy=v['dbtables']['lazy'] or '[no lazy tables]')
     
     with open(file, 'w') as f:
-        f.write( str(BEAUTIFY(dbstats)) )
+        f.write( str(DIV(*dbstats)) )
+        f.write(str( STYLE("""
+        table {width:95%}
+
+        pre {
+            padding: 5px;
+            line-height: 1.2em;
+        xwidth: 80%;
+        display: inline-block;
+        word-wrap: break-word;
+        word-break: break-all;
+            white-space: pre-wrap;
+            border : 1px silver solid;
+        }
+        """)) );
     

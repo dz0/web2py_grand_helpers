@@ -11,6 +11,8 @@ from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQ
 # test fields
 from  plugin_joins_builder.joins_builder import build_joins_chain
 
+from applications._test_app_linked.modules import plugin_AnySQLFORM
+
 orphan_with_target = Field('orphan_name')
 orphan_with_target.target_expression = db.auth_user.last_name + "bla"
 
@@ -506,6 +508,49 @@ def test_63a_good_group_Translation():
     target = db.good_group.title
     return UL( DalView(target, translator=gt).execute().column(target) )
 
+from  plugin_AnySQLFORM.helpers import get_fields_from_table_format
+
+def FK_represent( fk_field ):
+
+    fk_field.represent = None
+
+    target_table = fk_field.type.split()[1]
+
+    fmt = db[target_table]._format
+
+    vfield = Field.Virtual('ref_'+target_table,
+                           f=lambda row: fmt % row.get(target_table, row),
+                           label=fk_field.label,
+                           table_name=fk_field.tablename
+                           )
+
+    vfield.required_expressions = [fk_field] + [db[target_table][f] for f in  get_fields_from_table_format( fmt )]
+    vfield.required_joins = [db[target_table].on(db[target_table]._id == fk_field)]  # build_joins_chain(db.B, db.A)
+
+    return vfield
+
+def test_63_FK_represent_virtual():
+    fk_field = db.good.group_id
+    # fk_field.represent = None
+    vf = FK_represent(fk_field)
+
+    # rows = grand_select( vf ) # TODO : test some renderign...
+    rows = grand_select( db.good.id,  fk_field, vf , db.good.category_id )
+
+    from helpers import make_refs_represent_int
+    make_refs_represent_int(rows)
+
+    from plugin_AnySQLFORM.helpers import save_DAL_log
+    save_DAL_log()
+    # return rows
+    return dict(rows=rows, dbg=response.toolbar())
+
+    # rows.render()
+    # rows = [r for r in rows]
+    # rows = rows.as_list()
+    # return TABLE(rows)
+
+
 def test_63_granderp_good_goods():
 
     gt = GrandTranslator(
@@ -564,7 +609,7 @@ def test_63_granderp_good_goods():
     # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
     cols=[
         db.good.category_id,
-        db.good.group_id,
+        FK_represent( db.good.group_id ),
         db.good.sku,
         db.good.title,
         db.good.measurement_id,

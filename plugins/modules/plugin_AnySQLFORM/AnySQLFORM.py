@@ -13,7 +13,6 @@ from collections import defaultdict
 
 from pydal._globals import DEFAULT
 
-
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
 
