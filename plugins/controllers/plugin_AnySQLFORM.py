@@ -4,8 +4,9 @@ from pydal.objects import Field #, Row, Expression
 
 from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_from_formfields
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
-from plugin_AnySQLFORM.GrandRegister import GrandRegister, DalView, grand_select
+from plugin_AnySQLFORM.GrandRegister import GrandRegister, grand_select
 from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
+from plugin_AnySQLFORM.DalView import DalView, represent_FK
 
 
 # test fields
@@ -510,37 +511,24 @@ def test_63a_good_group_Translation():
 
 from  plugin_AnySQLFORM.helpers import get_fields_from_table_format
 
-def FK_represent( fk_field ):
 
-    fk_field.represent = None
 
-    target_table = fk_field.type.split()[1]
 
-    fmt = db[target_table]._format
-
-    vfield = Field.Virtual('ref_'+target_table,
-                           f=lambda row: fmt % row.get(target_table, row),
-                           label=fk_field.label,
-                           table_name=fk_field.tablename
-                           )
-
-    vfield.required_expressions = [fk_field] + [db[target_table][f] for f in  get_fields_from_table_format( fmt )]
-    vfield.required_joins = [db[target_table].on(db[target_table]._id == fk_field)]  # build_joins_chain(db.B, db.A)
-
-    return vfield
 
 def test_63_FK_represent_virtual():
     fk_field = db.good.group_id
     # fk_field.represent = None
-    vf = FK_represent(fk_field)
+    vf = represent_FK(fk_field)
 
     # rows = grand_select( vf ) # TODO : test some renderign...
     rows = grand_select( db.good.id,  fk_field, vf , db.good.category_id )
 
-    from helpers import make_refs_represent_int
-    make_refs_represent_int(rows)
 
-    from plugin_AnySQLFORM.helpers import save_DAL_log
+
+    from plugin_AnySQLFORM.helpers import save_DAL_log, force_refs_represent_ordinary_int
+
+    force_refs_represent_ordinary_int(rows)
+
     save_DAL_log()
     # return rows
     return dict(rows=rows, dbg=response.toolbar())

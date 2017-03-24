@@ -1,4 +1,8 @@
-def get_fields_from_table_format(format_str):  
+# -*- coding: utf-8 -*-
+
+from gluon import current
+
+def get_fields_from_table_format(format_str):
     """
     >>> get_fields_from_table_format( '%(first_name)s %(last_name)s' )
     ['first_name',  'last_name']
@@ -17,25 +21,33 @@ def extend_with_unique(A, B):
         if  str(b) not in map(str, A):
             A.append(b)
 
+def is_reference(field):
+    ref_indicator = field.type.split()[0]
+    return ref_indicator in ['reference', 'list:reference']
+
 def append_unique(A, b):
     if str(b) not in map(str, A):
         A.append(b)
 
 
-def make_refs_represent_int(rows):
-    from pydal.helpers.classes import Reference
+#
+def force_refs_represent_ordinary_int(rows):
+    db = current.db
     rows.compact=False
     row = rows[0]
     for table in row:  # TODO: not tested
         if table != '_extra':
-            for f, val in row[table].items():
-                # f = getattr(row[table], f)
-                if isinstance( val, Reference):
+
+            for f in row[table]:
+
+                if f in db[table].fields and  is_reference( db[table][f] ):
                     db[table][f].represent = None
-                    # f = db[table][f]
-                    # type_ref_indicator = f.type.split()[0]
-                    # if type_ref_indicator in ['reference', 'list:reference']:
-                    #   f.represent = None
+
+            # for f, val in row[table].items():
+            #     from pydal.helpers.classes import Reference
+            #     if isinstance( val, Reference):
+            #         db[table][f].represent = None
+
 
 
 

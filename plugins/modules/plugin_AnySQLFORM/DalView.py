@@ -2,7 +2,7 @@ from gluon.storage import Storage
 from gluon import current
 from pydal.objects import Field, Row, Expression
 
-from helpers import extend_with_unique, append_unique
+from helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -251,6 +251,56 @@ class DalView(Storage):
 
 
 ################ Virtual Fields in SELECT ####################
+## with extension to have attrs: required_expressions, required_joins
+
+def represent_table_asVirtualField(tablename):
+    """virtual field to represent table's record by format"""
+    db = current.db
+
+    target_table = tablename
+    fmt = db[target_table]._format
+
+    vfield = Field.Virtual('ref_' + target_table,
+                           f=lambda row: fmt % row.get(target_table, row),
+                           label=tablename,
+                           table_name=tablename
+                           )
+
+    vfield.required_expressions = [db[target_table][f] for f in get_fields_from_table_format(fmt)]
+
+    return vfield
+
+
+def represent_FK(fk_field):
+    """virtual field to represent foreign key (by joined table's format)"""
+
+    # from helpers import is_reference
+    # if not is_reference( fk_field):
+    #     raise RuntimeError("non FK field")
+
+    fk_field.represent = None  # disable default represent -- just in case
+
+    target_table = fk_field.type.split()[1]
+
+    vfield = represent_table_asVirtualField(target_table)
+    vfield.label = fk_field.label  # use label of referencing field
+
+    vfield.required_expressions.insert(0, fk_field)
+
+    db = current.db
+    vfield.required_joins = [db[target_table].on(db[target_table]._id == fk_field)]  # build_joins_chain(db.B, db.A)
+
+    return vfield
+
+
+def represent_PK(pk_field):
+    """virtual field to represent private key (by table's format)"""
+
+    target_table = pk_field.tablename
+
+    return represent_table_asVirtualField(target_table)
+
+
 
 # from gluon.storage import Storage
 def agg_list_singleton(vfield, context_rows):

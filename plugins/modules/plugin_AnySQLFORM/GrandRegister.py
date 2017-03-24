@@ -8,7 +8,7 @@ from DalView import *
 from GrandTranslator import *
 # from pydal._globals import DEFAULT
 
-from helpers import get_fields_from_table_format, save_DAL_log
+from helpers import get_fields_from_table_format, save_DAL_log, is_reference
 
 def get_grid_kwargs(self):
         return "TODO"
@@ -126,6 +126,12 @@ class GrandRegister( object ):
         # ordinary params
 
         self.columns  = columns
+        self.force_FK_table_represent = kwargs.pop('force_FK_table_represent', True)
+        if self.force_FK_table_represent:
+            for nr, col in enumerate( columns ):
+                if is_reference( col ):
+                    columns[nr] = represent_FK( col )
+
         self.id_field = id_field or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
@@ -351,13 +357,9 @@ class GrandRegister( object ):
             # _compact = rows.compact
             rows.compact = False
 
-            if fk_fields_leave_int:  # don't render references, as this would result in lots of single item requests
-                for table in rows[0]:   # TODO: not tested
-                    if table != '_extra':
-                        for f in db[table].fields:
-                            type_ref_indicator = f.type.split()[0]
-                            if type_ref_indicator in ['reference', 'list:reference']:
-                                f.represent = None
+            from helpers import force_refs_represent_ordinary_int
+            force_refs_represent_ordinary_int(rows)  # otherwise rows.render() would call extra selects for each row for each FK
+
 
             rows = rows.render()  # apply represent methods
 
