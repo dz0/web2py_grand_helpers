@@ -72,7 +72,7 @@ class GrandRegister( object ):
         left_join_chains = [ [] ], # probably would be enough
         search_fields = [ ],
         search_fields_update_triggers = {None:[ ]},
-        translate_fields = [],
+
     )
     
     mostly used for:
@@ -81,47 +81,66 @@ class GrandRegister( object ):
        records_w2ui
     
     """
-    def __init__( self,
-                  columns,
-                  id_field = None,
-                  left_join_chains = None, # probably would be enough
-                  search_fields = None,
-                  search_fields_update_triggers = None,
-                  translate_fields = None,  # or translator??
-                  response_view = "plugin_AnySQLFORM/w2ui_grid.html",
+    def __init__(self,
+                 columns,
+                 recid=None,
+                 left_join_chains = None,  # probably would be enough
+                 search_fields = None,
+                 search_fields_update_triggers = None, # TODO
+                 response_view = "plugin_AnySQLFORM/w2ui_grid.html",
 
-                  **kwargs # form_factory
-                ):
+                 **kwargs  # form_factory
+                 ):
 
         request = current.request
-        # for w2ui_grid response_view
-        self.w2ui_kwargs = Storage()
-        self.w2ui_kwargs.cid           = self.cid           =  kwargs.pop('cid', request.function )
-        self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
-        self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  kwargs.pop('w2ui_sort', None)
-        self.w2ui_kwargs.w2grid_options_extra_toolbar_extra =  kwargs.pop('w2grid_options_extra_toolbar_extra', None)
 
-        self.w2ui_kwargs.table_name    = self.table_name    =  kwargs.pop('table_name',  columns[0]._tablename)
-        self.w2ui_kwargs.data_name     = self.data_name     =  kwargs.pop('data_name',  self.table_name) or request.controller
-        # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
-        self.w2ui_kwargs.crud_urls  = self.crud_urls  =  Storage( kwargs.pop('crud_urls', {} ) )
-        crud_controller =  kwargs.pop('crud_controller', 'external' )
+        def init_w2ui_kwargs():
+            # for w2ui_grid response_view
+            self.w2ui_kwargs = Storage()
+            self.w2ui_kwargs.cid           = self.cid           =  kwargs.pop('cid', request.function )
+            self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
+            self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  kwargs.pop('w2ui_sort', None)
+            self.w2ui_kwargs.w2grid_options_extra_toolbar_extra =  kwargs.pop('w2grid_options_extra_toolbar_extra', None)
 
+            self.w2ui_kwargs.table_name    = self.table_name    =  kwargs.pop('table_name',  columns[0].tablename)
+            self.w2ui_kwargs.data_name     = self.data_name     =  kwargs.pop('data_name',  self.table_name) or request.controller
+            # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
 
-        if crud_controller in ['postback', None]:
+            self.w2ui_kwargs.w2grid_options_extra  =  kwargs.pop('w2grid_options_extra', {} )
+        init_w2ui_kwargs()
 
-            self.crud_urls.setdefault('add', URL(args=['add']))
-            self.crud_urls.setdefault('edit', URL(args=['edit', '___id___'], vars={'view_extension':'html'}))  # todo: use signature?
+        def init_recid():
+            db = current.db
+            # record id field (or expression?)
+            self.recid = recid
+            if not self.recid:
+                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
+                for col in columns:
+                    if hasattr(col, 'tablename'):
+                        main_table = db[ col.tablename ]
+                        self.recid = main_table._id
+                        print "DBG, recid", self.recid
+                        break
+        init_recid()
 
-        else:
-            self.crud_urls.setdefault('add', URL(crud_controller, 'add_' + crud_controller))
-            self.crud_urls.setdefault('edit', URL(crud_controller, 'edit_' + crud_controller, args=['___id___']))
+        def init_crud_actions():
+            self.w2ui_kwargs.crud_urls = self.crud_urls = Storage(kwargs.pop('crud_urls', {}))
+            crud_controller = kwargs.pop('crud_controller', 'external')
 
-        if  '___id___' not in self.crud_urls.edit:
-            self.crud_urls.edit += '/___id___'  # though we risk in case of vars in URL
+            if crud_controller in ['postback', None]:
 
-        self.w2ui_kwargs.w2grid_options_extra  =  kwargs.pop('w2grid_options_extra', {} )
+                self.crud_urls.setdefault('add', URL(args=['add']))
+                self.crud_urls.setdefault('edit', URL(args=['edit', '___id___'],
+                                                      vars={'view_extension': 'html'}))  # todo: use signature?
 
+            else:
+                self.crud_urls.setdefault('add', URL(crud_controller, 'add_' + crud_controller))
+                self.crud_urls.setdefault('edit', URL(crud_controller, 'edit_' + crud_controller, args=['___id___']))
+
+            if '___id___' not in self.crud_urls.edit:
+                self.crud_urls.edit += '/___id___'  # though we risk in case of vars in URL
+
+        init_crud_actions()
 
         # ordinary params
 
@@ -132,14 +151,12 @@ class GrandRegister( object ):
                 if is_reference( col ):
                     columns[nr] = represent_FK( col )
 
-        self.id_field = id_field or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
+
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
         # self.search_fields.append( SearchField('grid') )
 
         self.search_fields_update_triggers = search_fields_update_triggers
-
-        self.translate_fields = translate_fields
 
         self.response_view = response_view
 
@@ -164,17 +181,10 @@ class GrandRegister( object ):
         self.search_form = GrandSQLFORM( *self.search_fields, **kwargs )
         self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
 
-
-
         # self.left_join_chains = self.join_chains or [[]]
-        # self.search_fiels = self.search_fiels or columns
 
-        #~ self.selection = DalView(*self.columns,  left_join_chains=self.left_join_chains, **kwargs )
-        
-        # self.colums = self.selection.fields
 
         # self.search_fields_update_triggers                    # TODO: for ReactiveForm
-        # self.translate_fields                               # TODO: for GrandTranslator
 
 
     def w2ui_grid_init(self):
@@ -194,7 +204,7 @@ class GrandRegister( object ):
             w2ui_col =  {
                       'field': FormField(f).name, 'caption': f.label,
                       'size': "100%",
-                      'sortable': isinstance(f, (Field, Expression)),
+                      'sortable': isinstance(f, (Field, Expression)) or hasattr(f, 'orderby'),
                       'resizable': True
                       }
 
@@ -207,7 +217,7 @@ class GrandRegister( object ):
         self.w2ui_colnames = [d['field'] for d in self.w2ui_columns]  # parallely alligned to columns
         self.colnames = [ str(col) for col in self.columns ]          # parallely alligned to columns
 
-        if getattr(self, 'w2ui_sort', None) is None:
+        if getattr(self, 'w2ui_sort', None) is None: # if not set or set to None
             self.w2ui_sort = [{'field': self.w2ui_colnames[0] }]
 
         for sorter in self.w2ui_sort:
@@ -276,7 +286,7 @@ class GrandRegister( object ):
 
         elif request.args(0) in ['add', 'edit']:  # default CRUD actions
             action = request.args(0)
-            table = self.id_field.table
+            table = self.recid.table
             if action=='add':
                 form = SQLFORM(table)
                 form.process()
@@ -323,18 +333,52 @@ class GrandRegister( object ):
     #
     #     return data
 
+    def w2ui_get_orderby(self):
+        request = current.request
+        db = current.db
+
+        from lib.w2ui import serialized_lists, make_orderby #, save_export,
+        extra = serialized_lists(request.vars)  # sort, search
+
+        if 'sort' in extra:
+
+            map_w2ui_2_columns = dict(zip(self.w2ui_colnames, self.columns))
+
+            fields_mapping = {}
+            for w2ui_name in self.w2ui_colnames:
+                column = map_w2ui_2_columns[ w2ui_name ]
+                if hasattr(column, 'orderby'):
+                    fields_mapping[w2ui_name] = column.orderby  # for virtrual fields
+                else:
+                    fields_mapping[w2ui_name] = column
+
+            orderby = make_orderby(db, extra['sort'], fields_mapping=fields_mapping, table_name=self.recid.tablename) # table_name=None, append_id=False
+            return orderby
+
 
     def select(self):
         """get selection by filter of current request """
+
+        request = current.request
+
         filter = self.search_form.build_queries()
+
+
+        if request.vars.cmd == 'get-records':
+            offset = int(request.vars.offset)
+            limit = int(request.vars.limit)
+            limitby = (offset, offset + limit)
+
         
         # self.selection = DalView(
         rows = grand_select( 
-                        self.id_field, *self.columns,
+                        self.recid, *self.columns,
                         query=filter.query, having=filter.having,
 
                          left_join_chains=self.left_join_chains,
                          # group order distinct
+                         orderby=self.w2ui_get_orderby(),
+                         limitby=limitby,
                          **self.kwargs # translator inside
                          )
         
@@ -399,11 +443,11 @@ class GrandRegister( object ):
 
         records =  [ ]
 
-        id_field_str = str(self.id_field) # add w2ui recID
+        recid_str = str(self.recid) # add w2ui recID
 
         for row in rows:
             r = {  map_colnames_2_w2ui[colname]:  row[ colname ]       for colname in self.colnames }
-            r['recid'] = row[id_field_str]
+            r['recid'] = row[recid_str]
             records.append( r )
 
 
@@ -486,7 +530,7 @@ class GrandSQLFORM(QuerySQLFORM):
                         current.request,
                         target
                         # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
-                        # , id_field=db.category.id
+                        # , recid=db.category.id
                     )
 
             if type(target) is Expression and f.comparison  in ['equal', 'belongs']:

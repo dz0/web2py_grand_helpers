@@ -630,7 +630,7 @@ class QuerySQLFORM (AnySQLFORM ):
                         current.request,
                         target
                         # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
-                        #, id_field=db.category.id
+                        #, recid=db.category.id
                     )
 
 

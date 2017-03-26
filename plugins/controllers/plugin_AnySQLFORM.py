@@ -515,14 +515,13 @@ from  plugin_AnySQLFORM.helpers import get_fields_from_table_format
 
 
 
-def test_63_FK_represent_virtual():
+def test_63b_represent_FK_virtual():
     fk_field = db.good.group_id
     # fk_field.represent = None
     vf = represent_FK(fk_field)
 
     # rows = grand_select( vf ) # TODO : test some renderign...
     rows = grand_select( db.good.id,  fk_field, vf , db.good.category_id )
-
 
 
     from plugin_AnySQLFORM.helpers import save_DAL_log, force_refs_represent_ordinary_int
@@ -538,8 +537,44 @@ def test_63_FK_represent_virtual():
     # rows = rows.as_list()
     # return TABLE(rows)
 
+def test_63c_granderp_good_goods_representFK():
 
-def test_63_granderp_good_goods():
+    gt = None
+    cid = 'goods'
+
+    search_fields = [
+        [db.good.type, db.good.title, db.good.sku],
+    ]
+
+    db.good.category_id.represent = None
+    cols=[
+        # db.good.id,
+        represent_FK( db.good.group_id ),
+        # db.good.group_id,
+        db.good.type,
+        db.good.sku,
+        db.good.title,
+        db.good.category_id, # todo: test
+    ]
+
+    register = GrandRegister(cols,
+                             cid=cid,
+                             table_name='good',
+                             search_fields=search_fields,
+
+                             # force_FK_table_represent = False, # default True
+
+                             w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+                             , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
+                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             )
+    register.render()
+
+
+
+
+def test_63d_granderp_good_goods():
 
     gt = GrandTranslator(
         fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
@@ -597,7 +632,8 @@ def test_63_granderp_good_goods():
     # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
     cols=[
         db.good.category_id,
-        FK_represent( db.good.group_id ),
+        # represent_FK( db.good.group_id ),
+        db.good.group_id,  # by default will apply represent_FT
         db.good.sku,
         db.good.title,
         db.good.measurement_id,

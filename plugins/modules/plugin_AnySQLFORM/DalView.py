@@ -267,6 +267,7 @@ def represent_table_asVirtualField(tablename):
                            )
 
     vfield.required_expressions = [db[target_table][f] for f in get_fields_from_table_format(fmt)]
+    vfield.orderby = reduce(lambda a, b: a|b, vfield.required_expressions )
 
     return vfield
 
@@ -284,6 +285,7 @@ def represent_FK(fk_field):
 
     vfield = represent_table_asVirtualField(target_table)
     vfield.label = fk_field.label  # use label of referencing field
+    vfield.tablename = fk_field.tablename  # mark, that we use the FK table
 
     vfield.required_expressions.insert(0, fk_field)
 
