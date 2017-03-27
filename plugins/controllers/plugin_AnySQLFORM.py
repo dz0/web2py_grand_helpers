@@ -387,7 +387,7 @@ def test_47_grandregister():
                              , formstyle =  None  or 'table3cols' # divs table2cols table3cols
                              , **kwargs  # SEARCH FIELDS, etc
                              )
-    register.render()
+    return register.render()
 
 test_grandregister = test_47_grandregister
 def test_42_grandregister_with_just_SQLFORM():
@@ -485,7 +485,7 @@ def test_62_granderp_subjects():
                                 ,formstyle =  None #'divs' if IS_MOBILE else None,
                                 # _class = 'mobile_sqlform' if IS_MOBILE else None,
                                  )
-        register.render()
+        return register.render()
         # form = search_form(
         #     cid,
         #     *search_fields,
@@ -500,12 +500,13 @@ def test_62_granderp_subjects():
         #
         # return {'cid': cid, 'form': form}
 
+gt = GrandTranslator(
+    fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
+    language_id=2
+)
 
 def test_63a_good_group_Translation():
-    gt = GrandTranslator(
-        fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
-        language_id=2
-    )
+
     target = db.good_group.title
     return UL( DalView(target, translator=gt).execute().column(target) )
 
@@ -539,7 +540,7 @@ def test_63b_represent_FK_virtual():
 
 def test_63c_granderp_good_goods_representFK():
 
-    gt = None
+    # gt = None
     cid = 'goods'
 
     search_fields = [
@@ -569,18 +570,14 @@ def test_63c_granderp_good_goods_representFK():
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
                              , formstyle=None  # 'divs' if IS_MOBILE else None,
                              )
-    register.render()
+    return register.render()
 
 
 
 
 def test_63d_granderp_good_goods():
 
-    gt = GrandTranslator(
-        fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
-        language_id=2
-    )
-    gt = None
+    # gt = None
 
     cid = 'goods'
 
@@ -661,7 +658,7 @@ def test_63d_granderp_good_goods():
 
                              # ,w2grid_options_extra_toolbar_extra = "BLA"
                              )
-    register.render()
+    return register.render()
 
 
 def test_70_group_by_val():

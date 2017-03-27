@@ -74,12 +74,12 @@ class GrandRegister( object ):
         search_fields_update_triggers = {None:[ ]},
 
     )
-    
+
     mostly used for:
        form
        filter: query, having
        records_w2ui
-    
+
     """
     def __init__(self,
                  columns,
@@ -282,7 +282,8 @@ class GrandRegister( object ):
             if getattr(current, 'DBG', False):
                 save_DAL_log()
 
-            raise HTTP( 200,  response.json( result ) )
+            return  response.json( result )
+            # raise HTTP( 200,  response.json( result ) )
 
         elif request.args(0) in ['add', 'edit']:  # default CRUD actions
             action = request.args(0)
@@ -297,7 +298,9 @@ class GrandRegister( object ):
                 form = SQLFORM( table , record )
                 form.process()
 
-                raise HTTP(200, response.render('core/base_form.html', dict(form=form, row_buttons=None))) # for full request
+                return response.render('core/base_form.html', dict(form=form, row_buttons=None)) # for full request
+                # raise HTTP(200, response.render('core/base_form.html', dict(form=form, row_buttons=None))) # for full request
+
             # if form.process().accepted:
             #     response.flash = 'form accepted'
             # elif form.errors:
@@ -305,8 +308,8 @@ class GrandRegister( object ):
 
 
         else:
-            raise HTTP(200, response.render(self.response_view, self.form() ) )
-            # return  response.render(self.response_view, self.form() ) # ?
+            # raise HTTP(200, response.render(self.response_view, self.form() ) )
+            return  response.render(self.response_view, self.form() ) # ?
 
 
     # def search_filter(self):
@@ -349,10 +352,23 @@ class GrandRegister( object ):
                 column = map_w2ui_2_columns[ w2ui_name ]
                 if hasattr(column, 'orderby'):
                     fields_mapping[w2ui_name] = column.orderby  # for virtrual fields
+                elif isinstance(column, Field.Virtual) and hasattr(column, 'required_fields'):
+                    # construct order by -- putting id/ref fields at the end..
+                    id_fields = []
+                    order_fields = []
+                    for f in column.required_fields:
+                        if is_reference(f) or str(f)==str(f.table._id) :
+                            id_fields.append(f)
+                        else:
+                            order_fields.append(f)
+                    order_fields.extend( id_fields )
+                    column.orderby = reduce(lambda a, b: a|b, order_fields)
+
                 else:
                     fields_mapping[w2ui_name] = column
 
             orderby = make_orderby(db, extra['sort'], fields_mapping=fields_mapping, table_name=self.recid.tablename) # table_name=None, append_id=False
+
             return orderby
 
 
@@ -368,10 +384,12 @@ class GrandRegister( object ):
             offset = int(request.vars.offset)
             limit = int(request.vars.limit)
             limitby = (offset, offset + limit)
+        else:
+            limitby = None
 
-        
+
         # self.selection = DalView(
-        rows = grand_select( 
+        rows = grand_select(
                         self.recid, *self.columns,
                         query=filter.query, having=filter.having,
 
@@ -381,14 +399,15 @@ class GrandRegister( object ):
                          limitby=limitby,
                          **self.kwargs # translator inside
                          )
-        
+
         if hasattr(current, 'DBG') and current.DBG:
-            from helpers import tidy_SQL
-            current.session.sql_log = map(tidy_SQL, rows.sql_log)
-        # current.session.sql_nontranslated_log = map(tidy_SQL, rows.sql_nontranslated_log)
-        
+            # from helpers import tidy_SQL
+            # current.session.sql_log = map(tidy_SQL, rows.sql_log)
+            current.session.sql_log =  PRE( rows.sql_log )
+            current.session.sql_log_nontranslated = PRE( rows.sql_nontranslated_log )
+
         # rows = self.selection.execute()
-   
+
         return rows
 
     def w2ui_grid_records(self):

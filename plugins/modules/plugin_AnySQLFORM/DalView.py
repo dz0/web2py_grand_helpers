@@ -126,13 +126,14 @@ class DalView(Storage):
                 kwargs[ 'left' ] =  translation[ 'left' ]
 
             kwargs['having'] = translation[ 'having' ]
+            kwargs['orderby'] = translation[ 'orderby' ]
 
 
         # self.smart_distinct(kwargs)
         # self.smart_groupby(kwargs)
 
         if hasattr(current, 'dev_limitby'):
-            kwargs['limitby'] = current.dev_limitby  # from models/dev.py
+            kwargs['limitby'] = kwargs['limitby'] or current.dev_limitby  # from models/dev.py
             kwargs['orderby_on_limitby'] = False
 
         return kwargs
@@ -149,7 +150,7 @@ class DalView(Storage):
 
 
         for key in SELECT_ARGS+('query', 'left_given', 'join_given', 'left_join_chains', 'inner_join_chains', 'translator'):
-            self[key] = kwargs.get(key)
+            self[key] = kwargs.pop(key, None)
 
         # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
 
@@ -165,7 +166,7 @@ class DalView(Storage):
         if not self.join :
             self.get_join('inner')
 
-        self.kwargs = kwargs
+        self.kwargs = kwargs # not used...
             
     def get_join_chains( type_ = 'left'):
         #parse chains and return tablenames
@@ -210,28 +211,33 @@ class DalView(Storage):
     def translate_expressions(self):
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
-            t = self.translator.translate( [self.fields, self.query, self.having] )
-            t.fields, t.query, t.having = t.pop('expr')
+            t = self.translator.translate( [self.fields, self.query, self.having, self.orderby] )
+            t.fields, t.query, t.having, t.orderby = t.pop('expr')
+            # del t.orderby
             if t.affected_fields:
                 return t # also includes left, and affected_fields
 
 
 
-    def get_sql(self, translate=True):
+    def get_sql(self, translate=True, t=None):
+        from helpers import tidy_SQL
         self.guarantee_table_in_query()
-        t = self.translate_expressions()
+        t = t or self.translate_expressions()
         if translate and t:
-            return self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
+            sql = self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
         else:
-            return self.db(self.query)._select(*self.fields, **self.kwargs_4select())
-        
+            sql = self.db(self.query)._select(*self.fields, **self.kwargs_4select())
+
+        return tidy_SQL(sql, wrap_PRE=False)
+
     def execute(self, translate='transparent' or True or False ): # usuall select
         self.guarantee_table_in_query()
         t = self.translate_expressions()
         if translate and t:
             # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
             if getattr(current, 'DBG', False):
-                print "DBG Translated sql 2:", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
+                print "\nDBG Bare sql:\n",    self.get_sql(translate=False, t=t)
+                print "\nDBG Translated sql:\n", self.get_sql(translate=True, t=t)
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
             # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)

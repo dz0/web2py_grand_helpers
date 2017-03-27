@@ -25,6 +25,10 @@ def is_reference(field):
     ref_indicator = field.type.split()[0]
     return ref_indicator in ['reference', 'list:reference']
 
+def is_id(field):
+    return str(field)==str(field.table._id) or is_reference(field)
+
+
 def append_unique(A, b):
     if str(b) not in map(str, A):
         A.append(b)
@@ -54,11 +58,15 @@ def force_refs_represent_ordinary_int(rows):
 from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV
 from gluon.dal import DAL
 
-def tidy_SQL(sql):
+def tidy_SQL(sql, wrap_PRE=True):
     for w in 'from left inner where'.upper().split():
         sql = sql.replace(w, '\n' + w)
     sql = sql.replace('AND', '\n      AND')
-    return PRE(sql)
+
+    if wrap_PRE: sql = PRE(sql)
+    else: sql = "\n %s \n" % sql
+
+    return sql
 
 def save_DAL_log(file='/tmp/web2py_sql.log.html'):
     dbstats = []
