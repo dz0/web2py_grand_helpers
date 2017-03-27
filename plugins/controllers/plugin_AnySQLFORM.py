@@ -559,6 +559,7 @@ def test_63c_granderp_good_goods_representFK():
     ]
 
     register = GrandRegister(cols,
+                             force_FK_table_represent=True,
                              cid=cid,
                              table_name='good',
                              search_fields=search_fields,

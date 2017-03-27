@@ -145,7 +145,7 @@ class GrandRegister( object ):
         # ordinary params
 
         self.columns  = columns
-        self.force_FK_table_represent = kwargs.pop('force_FK_table_represent', True)
+        self.force_FK_table_represent = kwargs.pop('force_FK_table_represent', False)
         if self.force_FK_table_represent:
             for nr, col in enumerate( columns ):
                 if is_reference( col ):
