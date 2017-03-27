@@ -130,8 +130,9 @@ class FormField( Field ):
         data_srcs = [kwargs, self, field, default_field_attrs]
         field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
 
-
-        # call Super init
+        # multiple attr should be figured out before calling "construct_new_name" -- as it will be needid in SearchField
+        self.multiple = kwargs.pop('multiple', False)
+        print "DBG FormField multiple", self.multiple
 
         new_name = self.construct_new_name( field, kwargs ) 
         Field.__init__(self, fieldname=new_name, **field_attrs)
@@ -140,6 +141,8 @@ class FormField( Field ):
             self.label = self.tablename + ': ' +self.label
 
         db = self.db = current.db
+
+
         
         self.__dict__.update( kwargs )
 
@@ -433,7 +436,7 @@ class SearchField( FormField ):
         """
         
         FormField.__init__(self, field, **kwargs )  # overrides "construct_new_name" and inits 'comparison', 'name_extension'
-        
+        print "dbg SearchField.multiple", self.multiple
         # self.query_function = kwargs.pop('query_function', None)  # should be get from super __init__
         
         self.label += " (%s)"%self.name_extension  # DBG
@@ -462,6 +465,7 @@ class SearchField( FormField ):
 
         if not self.comparison:
             self.comparison = '='
+
 #            if not isinstance( self.target_expression, str):
 #             if  isinstance( self.target_expression, Expression):     
             if field.type in ('text', 'string', 'json'):
@@ -469,6 +473,8 @@ class SearchField( FormField ):
                     # comparison = 'like'     # a bit smarter ;)
                     self.comparison = 'contains'     # a bit smarter ;)
 
+            if self.multiple:
+                self.comparison = 'belongs'
 
         # name extension (based on comparison)
         extensions = {   '!=': 'not_equal',
@@ -612,6 +618,7 @@ class QuerySQLFORM (AnySQLFORM ):
 
         if f.type.startswith('reference '):
         # or f.type.startswith('list:reference '):
+
             foreign_table = f.type.split()[1]
             kwargs = dict(multiple=True)   if f.comparison == 'belongs' else {}
 

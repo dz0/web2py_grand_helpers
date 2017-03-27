@@ -49,7 +49,7 @@ def test_fields():
         ]
     return TEST_FIELDS
 
-test_fields()
+# test_fields()
 
 
 def test_20_queryform():
@@ -538,13 +538,34 @@ def test_63b_represent_FK_virtual():
     # rows = rows.as_list()
     # return TABLE(rows)
 
-def test_63c_granderp_good_goods_representFK():
+def test_63c_granderp_widget_autocomplete_multiple():
+
+    # gt = None
+    db.good.group_id.requires = None
+    # db.good.group_id.comparison = 'belongs'
+
+    search_fields = [
+        # SearchField( db.good.group_id, comparison='belongs', name_extension = ''), #requires=None,
+        SearchField(db.good.group_id, multiple=True),
+        db.good.group_id,
+        # db.good.type,
+        # db.good.title,
+    ]
+
+    search_form = GrandSQLFORM(*search_fields, translator=gt)
+    return dict( form = search_form , form_fields = search_form.formfields)
+
+def test_63d_granderp_good_goods_representFK():
 
     # gt = None
     cid = 'goods'
 
     search_fields = [
-        [db.good.type, db.good.title, db.good.sku],
+        # [db.good.type, db.good.title,  db.good.sku],
+        [
+            SearchField( db.good.group_id,  multiple=True),  # comparison='belongs',
+            # SearchField( db.good.category_id, comparison='belongs'),
+        ],
     ]
 
     db.good.category_id.represent = None
@@ -576,7 +597,7 @@ def test_63c_granderp_good_goods_representFK():
 
 
 
-def test_63d_granderp_good_goods():
+def test_63e_granderp_good_goods():
 
     # gt = None
 
@@ -642,6 +663,8 @@ def test_63d_granderp_good_goods():
     # translator =
 
     register = GrandRegister(cols,
+
+                             force_FK_table_represent=True,
                              cid=cid,
                              table_name='good',
                              search_fields=search_fields,
@@ -661,6 +684,10 @@ def test_63d_granderp_good_goods():
                              )
     return register.render()
 
+
+
+def test_65_aggregate_invoice_invoices():
+    pass
 
 def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,

@@ -415,7 +415,7 @@ class GrandRegister( object ):
 
         # in real usecase - we want to RENDER first
         def rows_rendered_flattened(rows, fk_fields_leave_int=True):
-            if not rows: return # if empty
+            if not rows: return [] # if empty
             colnames = rows.colnames
             # _compact = rows.compact
             rows.compact = False
@@ -522,15 +522,17 @@ class GrandSQLFORM(QuerySQLFORM):
         target = f.target_expression  # for brevity
 
         if f.type.startswith('reference ') or f.type.startswith('list:reference '):
-            if f.requires == DEFAULT or getattr(f, 'use_default_IS_IN_DB', None):
+            if not f.requires or f.requires == DEFAULT or override:
                 foreign_table = f.type.split()[1]
                 foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
                 # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
 
                 kwargs = dict(multiple=True) if f.comparison == 'belongs' else {}
                 format = db[foreign_table]._format
-                fields_in_format =  get_fields_from_table_format(format)
-                if set(fields_in_format ) & set(self.translator.fields): # if there are translatable fields in format
+                fields_in_format =    get_fields_from_table_format(format)
+                fields_in_format_as_str =  [ str(db[foreign_table][fname])    for fname in    fields_in_format]
+                # apply str as without it fields comparison allways gives True..?
+                if set(fields_in_format_as_str ) & set( map(str, self.translator.fields) ): # if there are translatable fields in format
                     f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], format, **kwargs)
 
 
