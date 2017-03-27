@@ -130,9 +130,7 @@ class FormField( Field ):
         data_srcs = [kwargs, self, field, default_field_attrs]
         field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
 
-        # multiple attr should be figured out before calling "construct_new_name" -- as it will be needid in SearchField
-        self.multiple = kwargs.pop('multiple', False)
-        print "DBG FormField multiple", self.multiple
+
 
         new_name = self.construct_new_name( field, kwargs ) 
         Field.__init__(self, fieldname=new_name, **field_attrs)
@@ -143,7 +141,10 @@ class FormField( Field ):
         db = self.db = current.db
 
 
-        
+        self.multiple = kwargs.pop('multiple', getattr(field, 'multiple', False)) # mainly for validators of references
+        self.override_validator = kwargs.pop('override_validator', getattr(field, 'override_validator', False)) # mainly for validators of references
+        # print "DBG FormField multiple", self.multiple
+
         self.__dict__.update( kwargs )
 
         
@@ -177,24 +178,27 @@ class FormField( Field ):
             #
             # default_IS_IN_DB = kwargs.get('default_requires', default_IS_IN_DB)
 
-            # if getattr(self, 'tablename', 'no_table') == 'no_table': # if orphan field
-            if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field
-                # we infer requires  from  FK
-                if self.type.startswith('reference ') or self.type.startswith('list:reference '):
-                    foreign_table = self.type.split()[1]
-                    # self.target_expression = db[foreign_table]._id  # probably better no, as looses info
-                    if not self.requires or self.requires == DEFAULT:
-                        self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format))
-                        self.validator_overriden = self.use_default_IS_IN_DB = True
 
 
-            # TODO: after changing type to reference -- apply logic from previoius paragraph
-            if self.type == 'id':  # override, as otherwise field is not shown in form
+
+            # override id type, as otherwise field is not shown in form
+            if self.type == 'id':
                 self.type = 'reference %s' % self.tablename
                 self._table = self.table = db[self.tablename] # maybe unnecessary
-                if not self.requires or self.requires == DEFAULT:
-                    self.requires = IS_EMPTY_OR( IS_IN_DB( db, self.table, self.table._format ) )
+
+
+            # smart validators for FK (according to referenced table)
+
+            # if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field  -- don't remember why it was here..?
+
+            if self.type.startswith('reference ') or self.type.startswith('list:reference '):
+                foreign_table = self.type.split()[1]
+                if not self.requires or self.requires == DEFAULT or self.override_validator:
+                    print "DBG, override FormField validator", self.name
+                    self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=self.multiple))
                     self.validator_overriden = self.use_default_IS_IN_DB = True
+
+
 
 
     
@@ -436,9 +440,10 @@ class SearchField( FormField ):
         """
         
         FormField.__init__(self, field, **kwargs )  # overrides "construct_new_name" and inits 'comparison', 'name_extension'
-        print "dbg SearchField.multiple", self.multiple
+        # print "dbg SearchField.multiple", self.multiple
         # self.query_function = kwargs.pop('query_function', None)  # should be get from super __init__
-        
+
+        self.update_naming(field, kwargs)
         self.label += " (%s)"%self.name_extension  # DBG
 
         if kwargs.pop('validate_IS_EMPTY_OR', False):
@@ -476,6 +481,9 @@ class SearchField( FormField ):
             if self.multiple:
                 self.comparison = 'belongs'
 
+        if self.comparison == 'belongs':
+            self.multiple = True
+
         # name extension (based on comparison)
         extensions = {   '!=': 'not_equal',
                          '<' : 'less_than',
@@ -495,8 +503,8 @@ class SearchField( FormField ):
             self.name_extension = extensions.get(self.comparison, self.comparison)  
        
                
-    def construct_new_name( self, field, kwargs ):
-        new_name = FormField.construct_new_name( self, field, kwargs )
+    def update_naming( self, field, kwargs ):
+        new_name = self.name
         self.init_comparison_and_name_extension( field, kwargs )
 
         if self.name_extension: # we could give      name_extension = ''  (in kwargs), so it is not appended
@@ -510,7 +518,7 @@ class SearchField( FormField ):
         if '[]' in new_name: # in case [] was given before extension...
             new_name = new_name.replace('[]', '')+'[]'
 
-        return new_name
+        self.name = new_name
         
     def get_query(self, val):
         if self.query_function:
@@ -609,8 +617,7 @@ class QuerySQLFORM (AnySQLFORM ):
 
     def set_default_validator(self, f):
 
-        override = getattr(f, 'validator_override', False)
-        if f.requires and f.requires != DEFAULT and override==False:  # do not override if sth set...
+        if f.requires and f.requires != DEFAULT and f.override_validator==False:  # do not override if sth set...
             return
 
         db = current.db  # todo: for Reactive form should be prefiltered dbset
@@ -618,33 +625,33 @@ class QuerySQLFORM (AnySQLFORM ):
 
         if f.type.startswith('reference '):
         # or f.type.startswith('list:reference '):
-
             foreign_table = f.type.split()[1]
-            kwargs = dict(multiple=True)   if f.comparison == 'belongs' else {}
-
-            f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, **kwargs)
+            f.requires = IS_IN_DB(db, db[foreign_table]._id, db[foreign_table]._format, multiple=f.multiple)
 
 
-        elif f.type in ('string', 'text'):
-            if isinstance(target, Field):
-                if f.comparison == 'equal':
-                    f.requires = IS_IN_DB(db, target)
+        if isinstance(target, Field) and  f.type in ('string', 'text'):  # todo: maybe add other types here
+
+                if f.comparison in ['equal', 'belongs']:
+                    f.requires = IS_IN_DB(db, target, multiple=f.multiple, distinct=True)
 
                 if f.comparison == 'contains':
                     # f.requires = IS_IN_DB(db, target)
                     # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Autocomplete-widget
                     f.widget = SQLFORM.widgets.autocomplete(
                         current.request,
-                        target
+                        target,
+                        distinct=True
+
                         # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
                         #, recid=db.category.id
                     )
 
 
-                # elif type(target) is Expression:
-                #     table = target._table
-                #     theset = db(table).select(target).column(target)
-                #     f.requires = IS_IN_SET(theset)
+        elif type(target) is Expression:
+            table = target._table
+            theset = db(table).select(target).column(target)
+            f.requires = IS_IN_SET(theset, multiple=f.multiple, distinct=True)
+
         else:
             AnySQLFORM.set_default_validator(self, f)
 

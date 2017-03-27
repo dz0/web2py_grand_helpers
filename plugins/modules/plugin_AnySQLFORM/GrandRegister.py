@@ -504,9 +504,8 @@ class GrandSQLFORM(QuerySQLFORM):
 
     def set_default_validator(self, f):
 
-        override = getattr(f, 'validator_override', True) or getattr(f, 'use_default_IS_IN_DB', True)
 
-        if override==False:  # do not override
+        if f.override_validator==False:  # do not override
             return
 
         if not self.translator:
@@ -522,50 +521,51 @@ class GrandSQLFORM(QuerySQLFORM):
         target = f.target_expression  # for brevity
 
         if f.type.startswith('reference ') or f.type.startswith('list:reference '):
-            if not f.requires or f.requires == DEFAULT or override:
+            if not f.requires or f.requires == DEFAULT or f.override_validator:
                 foreign_table = f.type.split()[1]
                 foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
                 # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
 
-                kwargs = dict(multiple=True) if f.comparison == 'belongs' else {}
+
                 format = db[foreign_table]._format
                 fields_in_format =    get_fields_from_table_format(format)
                 fields_in_format_as_str =  [ str(db[foreign_table][fname])    for fname in    fields_in_format]
                 # apply str as without it fields comparison allways gives True..?
                 if set(fields_in_format_as_str ) & set( map(str, self.translator.fields) ): # if there are translatable fields in format
-                    f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], format, **kwargs)
+                    f.requires = T_IS_IN_DB(self.translator, db, db[foreign_table], format, multiple=f.multiple)
+                    return
 
 
-        elif f.type in ('string', 'text'): # maybe also number type? or list:string
-            if   isinstance(target, Field) \
-            and  target in self.translator.fields:  # look if field needs to be translated
+        # if field needs to be translated
+        if str(target) in map(str, self.translator.fields):
 
-                if f.comparison == 'equal':
-                    f.requires = T_IS_IN_DB(self.translator, db, target)
+            if  isinstance(target, Field) :
+                if f.type in ('string', 'text'):  # maybe also number type? or list:string
 
-                if f.comparison == 'contains':
-                    # f.requires = IS_IN_DB(db, target)
-                    # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Autocomplete-widget
-                    # f.widget = SQLFORM.widgets.autocomplete(
-                    f.widget = T_AutocompleteWidget( self.translator,
-                        current.request,
-                        target
-                        # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
-                        # , recid=db.category.id
-                    )
+                    if f.comparison in [ 'equal', 'belongs']:
+                        f.requires = T_IS_IN_DB(self.translator, db, target, multiple=f.multiple, distinct=True)
 
-            if type(target) is Expression and f.comparison  in ['equal', 'belongs']:
-            # should work for Field and Expression targets
+                    if f.comparison == 'contains':
+                        # f.requires = IS_IN_DB(db, target)
+                        # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Autocomplete-widget
+                        # f.widget = SQLFORM.widgets.autocomplete(
+                        f.widget = T_AutocompleteWidget( self.translator,
+                            current.request,
+                            target,
+                            distinct=True,
+                            # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
+                            # , recid=db.category.id
+                        )
+
+            if type(target) is Expression  and f.comparison  in ['equal', 'belongs']:
+            # should work for Expression targets  -- and (seems) doesn't depend on translation
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)
                 theset = DalView(target, translator=self.translator).execute().column(target)
-
-                kwargs = dict(multiple=True) if f.comparison == 'belongs' else {}
-
-                f.requires = IS_IN_SET(theset, **kwargs)
+                f.requires = IS_IN_SET(theset, multiple=f.multiple, distinct=True)
 
 
-        else:
+        else:  # for Field targets...
             QuerySQLFORM.set_default_validator(self, f)
 
 

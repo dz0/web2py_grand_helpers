@@ -541,17 +541,19 @@ def test_63b_represent_FK_virtual():
 def test_63c_granderp_widget_autocomplete_multiple():
 
     # gt = None
-    db.good.group_id.requires = None
-    # db.good.group_id.comparison = 'belongs'
 
     search_fields = [
-        # SearchField( db.good.group_id, comparison='belongs', name_extension = ''), #requires=None,
-        SearchField(db.good.group_id, multiple=True),
-        db.good.group_id,
+        # FormField(db.good.group_id, multiple=True, override_validator=True), # override_validator=True  is for QuerySQLFORM
+        SearchField(db.good.group_id, multiple=True , override_validator=False),  # override_validator=False  doesn't take effect
+        SearchField(db.good.measurement_id, multiple=True , override_validator=True),  # needed if no translation involved
+        FormField( db.good.category_id,  comparison='belongs'), # override_validator=True  is for QuerySQLFORM
+        # SearchField( db.good.measurement_id, comparison='belongs', override_validator=True ), # override_validator=True  is for QuerySQLFORM
+        # SearchField( db.good.measurement_id, comparison='belongs'),
         # db.good.type,
         # db.good.title,
     ]
 
+    # search_form = QuerySQLFORM(*search_fields, translator=gt)
     search_form = GrandSQLFORM(*search_fields, translator=gt)
     return dict( form = search_form , form_fields = search_form.formfields)
 
