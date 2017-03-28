@@ -13,6 +13,8 @@ from collections import defaultdict
 
 from pydal._globals import DEFAULT
 
+from helpers import is_aggregate
+
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
 
@@ -677,11 +679,12 @@ class QuerySQLFORM (AnySQLFORM ):
             if input_value:
                 q = f.get_query( input_value ) # produce query
 
-                db = getattr(f.target_expression, 'db', None) # target expression might be str type
-                if db and f.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
-                # or db._adapter.dialect and f.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
-                    f.target_is_aggregate  = True # overrides default                    
-                
+                # db = getattr(f.target_expression, 'db', None) # target expression might be str type
+                # if db and f.target_expression.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
+                # # or db._adapter.dialect and f.target_expression.op in [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
+                #     f.target_is_aggregate  = True # overrides default
+
+                f.target_is_aggregate = is_aggregate( f.target_expression )
                 if f.target_is_aggregate:  # with this works OK
                     # print("DBG db.adapter", dir(db._adapter))
                     queries_4aggregates.append(  q ) 

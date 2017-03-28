@@ -12,14 +12,31 @@ def get_fields_from_table_format(format_str):
     results = re.findall(regex, format_str)
     return results
 
+def fields_are_equal(a, b):
+    "workaround of quirk of Field/Expression, as explained https://groups.google.com/d/msg/web2py/LvR7mGFX7UQ/VN5H6AS-AQAJ"
+    return str(a) == str(b)
 
 def extend_with_unique(A, B):
-    """extends list A with distinct items from B, which were not present in A
-    for Expression instances one needs to use str(..) asotherwise  overriden _eq_ understands different fields as same.. :/
+    """for Expression/Fields:  extends list A with distinct items from B, which were not present in A
+    for Expression/Fields instances one needs to use str(..) asotherwise  overriden _eq_ understands different fields as same.. :/
     """
     for b in B:
         if  str(b) not in map(str, A):
             A.append(b)
+
+def append_unique(A, b):
+    "for fields/expressions"
+    if str(b) not in map(str, A):
+        A.append(b)
+
+
+def is_aggregate( expr ):
+    if isinstance(expr, str):
+        return # TODO : regexp to see if it has SUM AVERAGE COUNT...
+
+    db = getattr(expr, 'db', current.db)  # target expression might be str type
+    return expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]
+                # [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
 
 def is_reference(field):
     ref_indicator = field.type.split()[0]
@@ -29,9 +46,6 @@ def is_id(field):
     return str(field)==str(field.table._id) or is_reference(field)
 
 
-def append_unique(A, b):
-    if str(b) not in map(str, A):
-        A.append(b)
 
 
 #
@@ -57,6 +71,7 @@ def force_refs_represent_ordinary_int(rows):
 
 from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV
 from gluon.dal import DAL
+
 
 def tidy_SQL(sql, wrap_PRE=True):
     for w in 'from left inner where'.upper().split():

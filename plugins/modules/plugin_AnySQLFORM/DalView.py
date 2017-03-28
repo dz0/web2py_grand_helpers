@@ -92,13 +92,14 @@ SELECT_ARGS = (
 
 
 
+
 class DalView(Storage):
     """similar as DB set, but "packs" query into kwargs 
     and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
     """
 
     def smart_distinct(self, kwargs):
-        """for Postgre, when selecting distinct nonkeys, they should include the order"""
+        """for Postgre, when selecting distinct nonkeys, they should include the orderby"""
         if kwargs.distinct:
             kwargs.setdefault( 'orderby', [] )  # make it list (if it is not yet)
             # kwargs.orderby. extend( kwargs.distinct )
@@ -110,27 +111,69 @@ class DalView(Storage):
                 extend_with_unique( kwargs.orderby, kwargs.distinct)
 
 
-    def smart_groupby(self, kwargs):  # todo
-        """for Postgre - when selecting aggregates, other fields must be grouped"""
-        pass
+    def missing_groupby_on_aggregate(self, kwargs, extra_aggregates=[]):
+        """for Postgre - when selecting aggregates, other fields must be grouped
+
+        extra_aggregates should be used in case we have aggregate expressions as strings
+        """
+        from helpers import append_unique, is_aggregate
+
+        aggregate_fields = list( filter( is_aggregate, self.fields ) ) + extra_aggregates
+
+        if not aggregate_fields: return
+
+        def fields_list_from_expr(groupby_expr):
+            result = []
+            def _traverse(expr):
+                if not expr: return
+
+                if isinstance(expr, Field):
+                    result.append( expr )
+                else:
+                    _traverse(expr.first)
+                    _traverse(expr.second)
+
+            _traverse(groupby_expr)
+
+            return result
+
+        groupby_fields = fields_list_from_expr( kwargs.get('groupby'))
+        missing_groupby_fields = []
+
+        for f in self.fields:
+            if not str(f) in map(str, aggregate_fields+groupby_fields):  # todo maybe optimize str mapping
+                append_unique(missing_groupby_fields, f)
+
+        if missing_groupby_fields:
+            # kwargs['groupby']  = reduce( lambda a, b: a|b, groupby_fields )
+            return reduce( lambda a, b: a|b, missing_groupby_fields )
+
+
 
     def kwargs_4select(self, translation=None):
         kwargs = Storage( {key:self[key] for key in SELECT_ARGS if self[key]} )
 
+        # self.smart_distinct(kwargs)
+        extra_groupby = self.missing_groupby_on_aggregate(kwargs) # for postgress
+
         if translation:   # inject translated stuff
             if kwargs.get( 'left' ):
                 kwargs[ 'left' ] = kwargs['left'][:] # clone, to prevent influencing of passed list
-                extend_with_unique( kwargs['left'], translation[ 'left' ])
+                extend_with_unique( kwargs['left'], translation[ 'left' ])  # todo: might need optimisation
                 # kwargs[ 'left' ] =  kwargs[ 'left' ] + self._translation[ 'left' ]
             else:
                 kwargs[ 'left' ] =  translation[ 'left' ]
 
-            kwargs['having'] = translation[ 'having' ]
-            kwargs['orderby'] = translation[ 'orderby' ]
+            if extra_groupby:
+                t2 = self.translator.translate(extra_groupby)
+                if t2:  extra_groupby = t2.expr
 
+            for key in SELECT_ARGS:
+                if key == 'left': continue # we already applied this
+                if key in translation:
+                    kwargs[key] = translation[key]
 
-        # self.smart_distinct(kwargs)
-        # self.smart_groupby(kwargs)
+        kwargs['groupby'] = kwargs['groupby'] | extra_groupby     if  kwargs['groupby']      else extra_groupby
 
         if hasattr(current, 'dev_limitby'):
             kwargs['limitby'] = kwargs['limitby'] or current.dev_limitby  # from models/dev.py
@@ -211,9 +254,9 @@ class DalView(Storage):
     def translate_expressions(self):
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
-            t = self.translator.translate( [self.fields, self.query, self.having, self.orderby] )
-            t.fields, t.query, t.having, t.orderby = t.pop('expr')
-            # del t.orderby
+            t = self.translator.translate( [self.fields, self.query, self.having, self.orderby, self.groupby, self.distinct ] )
+            t.fields, t.query, t.having, t.orderby, t.groupby, t.distinct = t.pop('expr')
+
             if t.affected_fields:
                 return t # also includes left, and affected_fields
 

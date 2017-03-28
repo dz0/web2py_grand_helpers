@@ -500,19 +500,21 @@ def test_62_granderp_subjects():
         #
         # return {'cid': cid, 'form': form}
 
-gt = GrandTranslator(
-    fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
-    language_id=2
-)
+
+try:
+    gt = GrandTranslator(
+        fields=[ db[table].title    for table in 'good  good_group  good_category  good_collection'.split() ],
+        language_id=2
+    )
+except: # ignore in other context
+    pass
 
 def test_63a_good_group_Translation():
 
     target = db.good_group.title
     return UL( DalView(target, translator=gt).execute().column(target) )
 
-from  plugin_AnySQLFORM.helpers import get_fields_from_table_format
-
-
+# from  plugin_AnySQLFORM.helpers import get_fields_from_table_format
 
 
 
@@ -794,11 +796,56 @@ def test_66_aggregate_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     return dict(form=form)
 
 
-def test_66_aggregate_warehouse_batches_Grid():
-    from plugin_AnySQLFORM.GrandTranslator import T_AutocompleteWidget
-    cid = 'batches'
+def test_66a_aggregate_warehouse_batches_Grid():
     # TODO
+    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals
 
+    gt = GrandTranslator(fields=[db.good.title], language_id=2) # helpers.get_fields_from_table_format(db.good)
+
+    cid = request.vars.cid
+    status = 'success'
+    cmd = request.vars.cmd
+
+    # good_title_field = db.translation_field.value.coalesce(db.good.title)
+    received_field = db.warehouse_batch.received.sum()
+    reserved_field = db.warehouse_batch.reserved.sum()
+    used_field = db.warehouse_batch.used.sum()
+    residual_field = db.warehouse_batch.residual.sum()
+
+    total_field = None
+    # total_field = Field.Virtual()
+
+    columns = [
+        represent_PK( db.good.id ), # virtual Expression
+        db.good.title,
+        received_field, reserved_field, used_field, residual_field,  # aggregates
+        # total_field, # virtual aggregate TODO
+        # TOTAL_ROWS,
+    ]
+
+    rows = select_with_virtuals(
+        *columns
+        , translator = gt
+        , left = build_joins_chain(db.good, db.warehouse_batch)
+        # , groupby =  db.good.title | db.good.sku
+    )
+
+    if hasattr(current, 'DBG') and current.DBG:
+        # from helpers import tidy_SQL
+        # current.session.sql_log = map(tidy_SQL, rows.sql_log)
+        current.session.sql_log = PRE(rows.sql_log)
+        current.session.sql_log_nontranslated = PRE(rows.sql_nontranslated_log)
+
+    return rows
+
+    """
+    SELECT  good.id, good.title, good.sku, good.type, good.measurement_id, good.group_id, good.category_id, good.note, good.active, good.packing_material, good.ean_code, good.cost, good.supply_term_for_offer, good.supply_term, good.use_group_wof, good.write_off_factor, good.length, good.width, good.height, good.net_weight, good.gross_weight, good.price, good.package_id, good.package_quantity, good.produced, good.color_id, good.price_list_settings_group_id, good.sketch_title, good.default_warehouse_id, good.default_cell_id, good.use_group_accountancy_code, good.accountancy_code, good.not_accounted, good.intrastat_code, good.intrastat_matches_good_group, COALESCE(translation_field.value,good.title), SUM(warehouse_batch.received), SUM(warehouse_batch.reserved), SUM(warehouse_batch.used), SUM(warehouse_batch.residual), COUNT(*) OVER()
+    FROM warehouse_batch JOIN good ON (good.id = warehouse_batch.good_id)
+    LEFT JOIN translation_field ON ((((translation_field.tablename = 'good') AND (translation_field.fieldname = 'title')) AND (translation_field.rid = good.id)) AND (translation_field.language_id = 1))
+    WHERE (warehouse_batch.warehouse_id IN (1))
+    GROUP BY good.id, COALESCE(translation_field.value,good.title)
+    ORDER BY SUM(warehouse_batch.residual) DESC LIMIT 50 OFFSET 0;
+    """
 
 def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
