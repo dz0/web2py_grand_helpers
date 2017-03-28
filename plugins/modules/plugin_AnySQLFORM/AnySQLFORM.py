@@ -135,7 +135,8 @@ class FormField( Field ):
         new_name = self.construct_new_name( field, kwargs ) 
         Field.__init__(self, fieldname=new_name, **field_attrs)
 
-        if type(field) is Field:
+
+        if getattr(current, 'DBG', False) and type(field) is Field:
             self.label = self.tablename + ': ' +self.label
 
         db = self.db = current.db
@@ -185,20 +186,6 @@ class FormField( Field ):
             if self.type == 'id':
                 self.type = 'reference %s' % self.tablename
                 self._table = self.table = db[self.tablename] # maybe unnecessary
-
-
-            # smart validators for FK (according to referenced table)
-
-            # if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field  -- don't remember why it was here..?
-
-            if self.type.startswith('reference ') or self.type.startswith('list:reference '):
-                foreign_table = self.type.split()[1]
-                if not self.requires or self.requires == DEFAULT or self.override_validator:
-                    print "DBG, override FormField validator", self.name
-                    self.requires = IS_EMPTY_OR(IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=self.multiple))
-                    self.validator_overriden = self.use_default_IS_IN_DB = True
-
-
 
 
     
@@ -305,8 +292,20 @@ class AnySQLFORM( object  ):
     def set_default_validator(self, f):
         """to be overriden -- example in translations..."""
         # TODO maybe use  gluon.validators  _default_validators()
-        pass
 
+        db = current.db
+        
+        # smart validators for FK (according to referenced table)
+
+        # if hasattr(self, 'tablename') and self.tablename == 'no_table': # if orphan field  -- don't remember why it was here..?
+
+        if f.type.startswith('reference ') or f.type.startswith('list:reference '):
+            foreign_table = f.type.split()[1]
+            if not f.requires or f.requires == DEFAULT or f.override_validator:
+                print "DBG, override FormField validator", f.name
+                f.requires = IS_EMPTY_OR(
+                    IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=f.multiple))
+                f.validator_overriden = f.use_default_IS_IN_DB = True
 
 
     def __getattr__( self, name ):
@@ -444,7 +443,8 @@ class SearchField( FormField ):
         # self.query_function = kwargs.pop('query_function', None)  # should be get from super __init__
 
         self.update_naming(field, kwargs)
-        self.label += " (%s)"%self.name_extension  # DBG
+        if getattr(current, 'DBG', False):
+            self.label += " (%s)"%self.name_extension  # DBG
 
         if kwargs.pop('validate_IS_EMPTY_OR', False):
             from gluon.validators import Validator , IS_EMPTY_OR

@@ -555,7 +555,7 @@ def test_63c_granderp_widget_autocomplete_multiple():
 
     # search_form = QuerySQLFORM(*search_fields, translator=gt)
     search_form = GrandSQLFORM(*search_fields, translator=gt)
-    return dict( form = search_form , form_fields = search_form.formfields)
+    return dict( form = search_form )
 
 def test_63d_granderp_good_goods_representFK():
 
@@ -686,10 +686,29 @@ def test_63e_granderp_good_goods():
                              )
     return register.render()
 
+def test_70_AnySQLFORM_edit():
+    table = db.auth_user
+    item = table(2)
+
+    fields = [table[f] for f in table.fields]
+
+    for f in fields:
+        # f.default = item[f]   # prepopulating form using "default" value  -- doesn't work with .process()
+        f.override_validator = False
+
+    form = AnySQLFORM(*fields)
+
+    # return form  # plain from...
+
+    # prepopulating form using form.vars
+    # http://web2py.com/books/default/chapter/29/07/forms-and-validators#Pre-populating-the-form
+    for f in form.formfields:
+        form.vars[f.name] = item[f.target_expression]
+
+    form.process()
+    return dict( form=form, vars=form.vars_as_Row() )
 
 
-def test_65_aggregate_invoice_invoices():
-    pass
 
 def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
