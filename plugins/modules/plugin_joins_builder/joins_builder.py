@@ -69,13 +69,30 @@ def update_reference_map_with_table(tablename, force_update=False):
     return refs        # save in singleton or so
 """
     
-def db_reference_map():
+def db_reference_map(cache_type='ram'):
     # should be used as singleton -- might cache or store in session?
     # but invalidated or updated on table alias!  (after db.tablenames.append( tablename ))
-    db = gluon_current.db
-    session = gluon_current.session
-    session.graph_model_data  = session.graph_model_data  or  { x: find_references_and_fkeys(x) for x in db.tables }
-    return session.graph_model_data
+    current = gluon_current
+
+    db = current.db
+    session = current.session
+
+    def the_data():
+        return { x: find_references_and_fkeys(x) for x in db.tables }
+
+    if cache_type == 'ram':
+        result = current.cache.ram('db_reference_map', the_data, time_expire=60*6 ) # 6 hours
+
+    if cache_type == 'session':
+        result = session.graph_model_data = session.graph_model_data or the_data()
+    else:
+        if session.graph_model_data: del session.graph_model_data
+
+    return result
+
+
+
+
      
  
     
