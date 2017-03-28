@@ -649,8 +649,8 @@ class QuerySQLFORM (AnySQLFORM ):
 
         elif type(target) is Expression:
             table = target._table
-            theset = db(table).select(target).column(target)
-            f.requires = IS_IN_SET(theset, multiple=f.multiple, distinct=True)
+            theset = db(table).select(target, distinct=target).column(target)
+            f.requires = IS_IN_SET(theset, multiple=f.multiple)
 
         else:
             AnySQLFORM.set_default_validator(self, f)

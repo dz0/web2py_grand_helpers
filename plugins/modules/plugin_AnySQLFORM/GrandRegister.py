@@ -561,8 +561,8 @@ class GrandSQLFORM(QuerySQLFORM):
             # should work for Expression targets  -- and (seems) doesn't depend on translation
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)
-                theset = DalView(target, translator=self.translator).execute().column(target)
-                f.requires = IS_IN_SET(theset, multiple=f.multiple, distinct=True)
+                theset = DalView(target, distinct=target, translator=self.translator).execute().column(target)
+                f.requires = IS_IN_SET(theset, multiple=f.multiple)
 
 
         else:  # for Field targets...

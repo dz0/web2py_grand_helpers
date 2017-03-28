@@ -175,6 +175,7 @@ class GrandTranslator():
 
 
 # Validator with translator
+from gluon.http import HTTP
 
 class T_AutocompleteWidget( AutocompleteWidget ):
     def __init__( self, translator, *args, **kwargs):

@@ -708,6 +708,96 @@ def test_70_AnySQLFORM_edit():
     form.process()
     return dict( form=form, vars=form.vars_as_Row() )
 
+from datetime import datetime
+def test_65_invoice_invoices_searchForm_datesPicking_TODO():
+
+        response.subtitle = T('invoice__list_form')
+
+        cid = 'invoices'
+
+        db.invoice.financial_status.default = None
+        db.invoice.type.default = None
+
+
+        search_fields = [
+            [db.invoice.type],
+            [db.invoice.subject_id,
+             # Field('statuses[]', label=db.invoice.status.label, requires=IS_IN_SET(INVOICE_STATUSES, multiple=True))],
+             SearchField(db.invoice.status, requires=IS_IN_SET(INVOICE_STATUSES, multiple=True), override_validator=False)
+             ],
+            [db.invoice.number, db.invoice.financial_status],
+            # [Field('date_period', 'boolean', label=db.invoice.date.label, default=True)],
+            # [Field('date_from', 'date', label=T('core__from'),
+            #        default=datetime.date.today() - datetime.timedelta(days=30)),
+            #  Field('date_until', 'date', label=T('core__until'), default=datetime.date.today())],
+
+        ]
+
+
+        # form.custom.widget.date_period.parent.append(CAT(
+        #     A(T('calendar__this_week'), _href='#', _style='margin-left: 10px;',
+        #       _onclick=(
+        #           'setCurrentWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+        #     A(T('calendar__this_month'), _href='#', _style='margin-left: 10px;',
+        #       _onclick=(
+        #           'setCurrentMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+        #     A(T('calendar__previous_week'), _href='#', _style='margin-left: 10px;',
+        #       _onclick=(
+        #           'setPreviousWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+        #     A(T('calendar__previous_month'), _href='#', _style='margin-left: 10px;',
+        #       _onclick=(
+        #           'setPreviousMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;'))
+        # ))
+
+        import itertools
+        search_fields = itertools.chain(*search_fields) # flatten
+        form =  GrandSQLFORM(*search_fields )
+        # return form
+        return dict( form=form )
+
+
+def test_66_aggregate_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
+    from plugin_AnySQLFORM.GrandTranslator import T_AutocompleteWidget
+    cid = 'batches'
+
+    db.warehouse_batch.good_id.widget = T_AutocompleteWidget( gt, request, db.good.title , id_field=db.good.id) # | db.category
+    db.warehouse_batch.good_id.widget = T_AutocompleteWidget( gt, request, db.subject_subject.title , id_field=db.subject_subject.id) # | db.category
+
+    # AUTOCOMPLETE(
+    #     db, auth, 'good', url=URL('warehouse', 'search_batch_goods'),
+    #     context='form[name=batches__form]'
+    # ).widget
+    # db.warehouse_batch.supplier_id.widget = AUTOCOMPLETE(
+    #     db, auth, 'subject_subject', url=URL('warehouse', 'search_batch_suppliers'),
+    #     context='form[name=batches__form]'
+    # ).widget
+
+    search_fields = [
+        [db.good.group_id,
+         SearchField(db.warehouse_batch.good_id) # , override_validator=True
+         ],
+        [db.good.category_id, db.warehouse_batch.supplier_id],
+    ]
+
+
+    import itertools
+    search_fields = itertools.chain(*search_fields)  # flatten
+
+    form = GrandSQLFORM(
+
+        *search_fields,
+        cid=cid,
+        table_name='batches'
+    )
+
+    # return  form
+    return dict(form=form)
+
+
+def test_66_aggregate_warehouse_batches_Grid():
+    from plugin_AnySQLFORM.GrandTranslator import T_AutocompleteWidget
+    cid = 'batches'
+    # TODO
 
 
 def test_70_group_by_val():
