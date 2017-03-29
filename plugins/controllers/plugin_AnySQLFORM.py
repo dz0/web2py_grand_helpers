@@ -8,6 +8,7 @@ from plugin_AnySQLFORM.GrandRegister import GrandRegister, grand_select
 from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
 from plugin_AnySQLFORM.DalView import DalView, represent_FK
 
+from plugin_AnySQLFORM.helpers import save_DAL_log
 
 # test fields
 from  plugin_joins_builder.joins_builder import build_joins_chain
@@ -758,7 +759,7 @@ def test_65_invoice_invoices_searchForm_datesPicking_TODO():
         return dict( form=form )
 
 
-def test_66_aggregate_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
+def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     from plugin_AnySQLFORM.GrandTranslator import T_AutocompleteWidget
     cid = 'batches'
 
@@ -796,9 +797,9 @@ def test_66_aggregate_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     return dict(form=form)
 
 
-def test_66a_aggregate_warehouse_batches_Grid():
+def test_66b_aggregate_warehouse_batches_Grid():
     # TODO
-    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals
+    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals, virtual_aggregate
 
     gt = GrandTranslator(fields=[db.good.title], language_id=2) # helpers.get_fields_from_table_format(db.good)
 
@@ -812,22 +813,62 @@ def test_66a_aggregate_warehouse_batches_Grid():
     used_field = db.warehouse_batch.used.sum()
     residual_field = db.warehouse_batch.residual.sum()
 
-    total_field = None
-    # total_field = Field.Virtual()
+    from lib.branch import allowed_warehouse_ids, allowed_warehouses_query
+    warehouse_ids = allowed_warehouse_ids(db, auth, active=None, as_list=True) or [0]
+    query = db.warehouse_batch.warehouse_id.belongs(warehouse_ids) & db.warehouse_batch.good_id > 0
+
+    from lib.currency import convert, get_symbol
+    from decimal import Decimal as D
+
+    def _total_field(row):
+        # data = db(query & (db.warehouse_batch.good_id == row.good.id)).select(
+        data = db((db.warehouse_batch.good_id == row.good.id)).select(
+            db.warehouse_batch.ALL,
+            join=[db.good.on(db.good.id == db.warehouse_batch.good_id)]
+        )
+
+        total = D('0.00000')
+        for d in data:
+            total += convert(
+                db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date)
+        return total
+
+    total_field_v = Field.Virtual( 'total_field_v', f=_total_field, table_name='good' )
+    total_field_vagg = virtual_aggregate( 'total_field_vagg',
+        # ftype='decimal(10,2)',
+
+        # query=query,
+        # query = db.warehouse_batch.good_id==271,
+        groupby=db.warehouse_batch.good_id,  # expression used to group stuff (also will be column in select)
+        # required_expressions=[db.warehouse_batch.ALL],  # cols in select
+        required_expressions=[db.warehouse_batch.price, db.warehouse_batch.residual, db.warehouse_batch.currency_id, db.warehouse_batch.rate_date  ],  # cols in select
+        f_agg = lambda r, group:  str( D('0.00000')+sum(group) ),  # aggregation lambda
+        # f_agg = lambda r, group:  'bla',  # aggregation lambda
+        # f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
+        f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
+        table_name = 'warehouse_batch'
+        #, translator = None
+        # , left #** select__kwargs
+        # , limitby=(0,2)
+    )
 
     columns = [
-        represent_PK( db.good.id ), # virtual Expression
-        db.good.title,
-        received_field, reserved_field, used_field, residual_field,  # aggregates
-        # total_field, # virtual aggregate TODO
-        # TOTAL_ROWS,
+        db.good.id
+        # , represent_PK( db.good.id ) # virtual Expression
+        # , db.good.title
+        # , received_field, reserved_field, used_field, residual_field  # aggregates
+        # , total_field_v # ordinary virtual
+        , total_field_vagg # virtual aggregate
+        # , TOTAL_ROWS
     ]
 
     rows = select_with_virtuals(
         *columns
         , translator = gt
-        , left = build_joins_chain(db.good, db.warehouse_batch)
-        # , groupby =  db.good.title | db.good.sku
+        , left = [ db.warehouse_batch.on(db.warehouse_batch.good_id==db.good.id) ]
+        # , left = build_joins_chain(db.good, db.warehouse_batch)
+        # , groupby =  db.good.title | db.good.sku  # figured out automatically
+        , limitby = (0,3)
     )
 
     if hasattr(current, 'DBG') and current.DBG:
@@ -835,7 +876,8 @@ def test_66a_aggregate_warehouse_batches_Grid():
         # current.session.sql_log = map(tidy_SQL, rows.sql_log)
         current.session.sql_log = PRE(rows.sql_log)
         current.session.sql_log_nontranslated = PRE(rows.sql_nontranslated_log)
-
+        save_DAL_log()
+    # return dict(rows=rows)
     return rows
 
     """
@@ -949,22 +991,26 @@ def test_02_virtual_field():
 
 
 
-class FieldVirtual_WithDependancies(Field.Virtual):
-    def __init__(self, name, f=None, ftype='string', label=None, table_name=None,
-                 required_expressions=[],  required_joins=[]):
-        Field.Virtual.__init__(self, name, f, ftype, label, table_name)
-        self.required_expressions = required_expressions
-        self.required_joins = required_joins
-
-
-class FieldVirtual_Aggregate(Field.Virtual):
-    pass
-    # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
-    #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
 
 
 def dbg():
-    return dict(dbg=response.toolbar())
+    form = FORM(
+        INPUT(_value='clear_session', _name='clear_session',  _type='submit' )
+        , INPUT(_value='refresh', _name='refresh',  _type='submit' )
+    )
+    if request.vars.clear_session:
+        session.clear()
+
+    if request.vars.refresh:
+        redirect(URL())
+
+    try:
+        with open('/tmp/web2py_sql.log.html') as f:
+            sql_log_full=XML(f.read())
+    except:
+        sql_log_full=''
+
+    return dict(dbg=response.toolbar(), form=form, session=session, sql_log_full=sql_log_full)
 
 
 def test_24_virtual_field():

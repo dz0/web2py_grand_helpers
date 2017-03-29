@@ -1,12 +1,14 @@
 from gluon.storage import Storage
 from gluon import current
 from pydal.objects import Field, Row, Expression
+from gluon.html import PRE
 
 from helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
+from helpers import sql_log_format, get_sql_log
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
-from gluon.http import HTTP # for grandregister render()
+
 
 def rename_row_fields(names_map, row, remove_src=True):
     """
@@ -107,7 +109,7 @@ class DalView(Storage):
                 extend_with_unique( kwargs.orderby, kwargs.distinct)
             if kwargs.distinct==True:
                 kwargs.distinct = []
-                extend_with_unique( kwargs.distinct, self.fields )
+                extend_with_unique( kwargs.distinct, self.columns )
                 extend_with_unique( kwargs.orderby, kwargs.distinct)
 
 
@@ -118,7 +120,7 @@ class DalView(Storage):
         """
         from helpers import append_unique, is_aggregate
 
-        aggregate_fields = list( filter( is_aggregate, self.fields ) ) + extra_aggregates
+        aggregate_fields = list( filter( is_aggregate, self.columns ) ) + extra_aggregates
 
         if not aggregate_fields: return
 
@@ -140,11 +142,18 @@ class DalView(Storage):
         groupby_fields = fields_list_from_expr( kwargs.get('groupby'))
         missing_groupby_fields = []
 
-        for f in self.fields:
+        for f in self.columns:
+
+            # skip or warn for Window functions
+            if isinstance(f, str):
+                print "Warning:  %r in missing_groupby_on_aggregate is string -- error if it is window function.   If needed columns as str  should be listed in groupby manually" % f
+                continue
+
             if not str(f) in map(str, aggregate_fields+groupby_fields):  # todo maybe optimize str mapping
                 append_unique(missing_groupby_fields, f)
 
         if missing_groupby_fields:
+            # print "dbg missing_groupby_fields", missing_groupby_fields
             # kwargs['groupby']  = reduce( lambda a, b: a|b, groupby_fields )
             return reduce( lambda a, b: a|b, missing_groupby_fields )
 
@@ -181,14 +190,14 @@ class DalView(Storage):
 
         return kwargs
 
-    def __init__(self, *fields, **kwargs):
+    def __init__(self, *columns, **kwargs):
         """
         important part is join_chains -- array of join_chain (see plugin_joins_builder) 
                          they can be reused by reactiveFORM... to figure out which tables' fields should be updated  
                          
-        ps.:  "fields" mean more generally "columns" or "expressions". But for consistency I leave as "fields"...
+        ps.:  "columns" can be items of Field | Expression | str .
         """
-        self.columns = self.fields = fields
+        self.columns = columns
         self.db = current.db
 
 
@@ -241,7 +250,7 @@ class DalView(Storage):
 
     def guarantee_table_in_query(self):
         if self.query == True: # this means "Everything"
-            for expr in self.fields:
+            for expr in self.columns:
                 if isinstance(expr, Field):
                     main_table = expr.table
                     self.query = main_table # main_table.id > 0
@@ -254,7 +263,7 @@ class DalView(Storage):
     def translate_expressions(self):
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
-            t = self.translator.translate( [self.fields, self.query, self.having, self.orderby, self.groupby, self.distinct ] )
+            t = self.translator.translate( [self.columns, self.query, self.having, self.orderby, self.groupby, self.distinct ] )
             t.fields, t.query, t.having, t.orderby, t.groupby, t.distinct = t.pop('expr')
 
             if t.affected_fields:
@@ -269,7 +278,7 @@ class DalView(Storage):
         if translate and t:
             sql = self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
         else:
-            sql = self.db(self.query)._select(*self.fields, **self.kwargs_4select())
+            sql = self.db(self.query)._select(*self.columns, **self.kwargs_4select())
 
         return tidy_SQL(sql, wrap_PRE=False)
 
@@ -284,7 +293,7 @@ class DalView(Storage):
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
             # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
-                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.fields) if str(t)!=str(f) } # todo: maybe use trows.parse
+                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.columns) if str(t)!=str(f) } # todo: maybe use trows.parse
 
                 trows.compact = False
                 for row in trows:
@@ -294,13 +303,13 @@ class DalView(Storage):
                 trows.compact = True
             return trows
         else:
-            rows = self.db(self.query).select(*self.fields, **self.kwargs_4select())
+            rows = self.db(self.query).select(*self.columns, **self.kwargs_4select())
             # rows.compact = compact
             return rows
 
 
 ################ Virtual Fields in SELECT ####################
-## with extension to have attrs: required_expressions, required_joins
+## with extension to have attrs: required_expressions, required_joins (means left joins)
 
 def represent_table_asVirtualField(tablename):
     """virtual field to represent table's record by format"""
@@ -384,25 +393,26 @@ def agg_list_singleton(vfield, context_rows):
 
         ids = context_rows.column(groupby)
         query = groupby.belongs( set(ids) )
+        if agg_vars.query:
+            query &= agg_vars.query
 
-        # ordinary select
-        # rows_4grouping = db(  query ).select(groupby,  *agg_vars.required_expressions,
-        #                                                                 **agg_vars.select__kwargs)
-
+        # ordinary select (no translation) would be
+        # rows_4grouping = db(  query ).select(groupby,  *agg_vars.required_expressions, **agg_vars.select__kwargs)
 
         # DalView with translator
-        translator = agg_vars.translator # or use global
-        selection = DalView(groupby,  *agg_vars.required_expressions,
-                            translator=translator, query=query, **agg_vars.select__kwargs)
+        selection = DalView(groupby,  # groupby needed  here for   .group_by_value()  # otherwise query would be enough
+                            *agg_vars.required_expressions,
+                            translator=agg_vars.translator ,
+                            query=query,
+                            **agg_vars.select__kwargs)
 
         rows_4grouping = selection.execute()
-        
-        
 
-        grouped = rows_4grouping.group_by_value(groupby)  # todo: maybe use Rows.join(..)
+
+        grouped = rows_4grouping.group_by_value(groupby)  # todo: maybe use Rows.join(..) https://groups.google.com/forum/#!topic/web2py-developers/xpCJaD-GAcU
         
         # log sql
-        if current.DBG:
+        if getattr(current, 'DBG', None):  # TODO change to LOG_SQL ?
             grouped = Storage( grouped )
             grouped.sql = selection.get_sql() 
             grouped.sql_nontranslated = selection.get_sql(translate=False)
@@ -435,6 +445,9 @@ def select_with_virtuals(*columns,  **kwargs):
     nonshown: [ A.f1 ]
 
     """
+
+    sql_log_start = len( get_sql_log() )
+
     delete_nonshown = kwargs.pop('delete_nonshown', True)
 
     dbset = kwargs.pop('dbset', None)
@@ -463,14 +476,15 @@ def select_with_virtuals(*columns,  **kwargs):
             if col not in virtual:
                 virtual.append( col )
 
-                if getattr(col, 'aggregate', None):
-                    continue  # skip aggregateble vfields
+                # if getattr(col, 'aggregate', None):
+                #     continue  # skip aggregateble vfields for now: todo: maybe add groupby to nonshown
 
                 # look for dependances
                 for required_expr in getattr(col, 'required_expressions', []):
                     # if required_expr not in nonshown:
                         # nonshown.append( required_expr )
                     append_unique(nonshown, required_expr )
+
                 required_joins = getattr(col, 'required_joins', [])
                 if required_joins:
                     # todo: maybe extend_with_unique: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
@@ -517,18 +531,29 @@ def select_with_virtuals(*columns,  **kwargs):
         # https://github.com/web2py/web2py/blob/master/gluon/sqlhtml.py#L2862
 
         for field in virtual:
-            if isinstance(field, Field.Virtual) and field.tablename in row:
+            if isinstance(field, Field.Virtual):
+                    if not field.tablename in row:  # if virtual field is "orphan"  or no field from db[tablename] has been selected
+                        row[field.tablename] = Row()
 
                     if hasattr(field, 'aggregate'): # aggregate virtuals always do extra join now (though they might reuse exixting rows (if all of them are selecteed))
                         id_field = field.aggregate['groupby']
                         group_id = row[id_field]
                         rows_4_aggregate = agg_list_singleton(vfield=field, context_rows=rows)
-                        if current.DBG and first_row: 
+                        if getattr(current, 'DBG', None) and first_row:
                             rows.sql_log.append( rows_4_aggregate.sql )
                             rows.sql_nontranslated_log.append( rows_4_aggregate.sql_nontranslated )
                         group = rows_4_aggregate[group_id]
-                        field.f = lambda r: field.aggregate.f(r, group) # is not called directly
-                        row[field.tablename][field.name] = field.aggregate.f(row, group)
+                        field.f = lambda r: field.aggregate.f(r, group) # is not called directly -- might be deleted?
+                        # print 'dbg group', group
+                        try:
+                            value =field.aggregate.f(row, group)
+                        except Exception as e:
+                            import traceback
+                            value = traceback.format_exc()
+                            value += "\n Group: %r. \n Row: %r " %(group, row)
+                            value = PRE(value,   _class='code',  _style="display: inline-block; word-wrap: break-word; word-break: break-all;white-space: pre-wrap; border:1px solid silver;")
+
+                        row[field.tablename][field.name] = value
 
                     else:
                         # execute virtual function
@@ -557,7 +582,7 @@ def select_with_virtuals(*columns,  **kwargs):
     rows.rawcolnames = rows.colnames
     rows.colnames = [str(col) for col in columns]
 
-
+    current.session.last_select_with_virtuals = sql_log_format ( get_sql_log( sql_log_start ) )
     return rows
 
     # TODO: maybe apply
@@ -586,3 +611,80 @@ def select_with_virtuals(*columns,  **kwargs):
 def grand_select(*args, **kwargs):
     return select_with_virtuals(*args, **kwargs)
     # return DalView(*args, **kwargs).execute()
+
+
+
+
+# class FieldVirtual_WithDependancies(Field.Virtual):
+#     def __init__(self, name, f=None, ftype='string', label=None, table_name=None,
+#                  required_expressions=[],  required_joins=[]):
+#         Field.Virtual.__init__(self, name, f, ftype, label, table_name)
+#         self.required_expressions = required_expressions
+#         self.required_joins = required_joins
+#
+#
+# class FieldVirtual_Aggregate(Field.Virtual):
+#     pass
+#     # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
+#     #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
+
+
+def virtual_aggregate(  name,
+                        groupby, # expression used to group stuff (also will be column in select)
+                        required_expressions,  # cols in select
+                        f_agg,   # aggregation lambda
+                        f_group_item=None,  # function applied to group item/row -- like f for ordinary Field.Virtual
+
+                        ftype='string', label=None, table_name=None,  # standart Field.Virtual(..) kw_args
+                        translator=None,
+                        query = None,
+                        **select__kwargs  # probably mostly needed will be 'left' join
+                      ):
+
+    """
+    constructs Field.Virtual which can aggregate fields...
+    needs to use    agg_list_singleton    inside   select_with_virtuals
+
+    Example:
+            total_field_vagg = virtual_aggregate( 'total_field_vagg',
+                query=query,
+                groupby=db.warehouse_batch.good_id,  # expression used to group stuff (also will be column in select)
+                required_expressions=db.warehouse_batch.ALL,  # cols in select
+                f_agg = lambda r, group: D('0.00000')+sum(group),  # aggregation lambda
+                f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
+                table_name = 'warehouse_batch'
+                #, translator = None
+                # , left #** select__kwargs
+            )
+    """
+    fv = Field.Virtual(name, f=lambda r: None, ftype=ftype, label=label, table_name=table_name)
+
+    # we will not use f directly... (though it will be assigned inside select_with_virtuals(..)
+    fv.f = None # workaround, as leaving f=None in args, would make "name" to be used as "f"...
+
+    if f_group_item:
+        f_agg2 = f_agg # just in case - to prevent (possible?) recursion
+        f_agg = lambda row, group: f_agg2(  row,  map(f_group_item, group)    )  # apply aggregate function to  processed/represented items
+
+
+    fv.required_expressions = [groupby]  # this should be available per group
+
+    fv.aggregate = dict(groupby=groupby,
+                        required_expressions=required_expressions,
+                        f=f_agg,
+                        translator=translator,
+                        query=query,
+                        select__kwargs=select__kwargs,
+                        )
+
+
+    # fv.aggregate = dict(groupby=db.A.id,
+    #                   select__kwargs=dict( left=[db.B.on(db.B.A_id == db.A.id)] ),
+    #                   required_expressions=[db.B.id, db.B.f1],
+    #                   # f =   lambda row, group:  ', '.join( map(, map(lambda r: r[db.B.id], group )) )
+    #                   f=lambda row, group: ', '.join(map( lambda group_row: "%(id)s %(f1)s" % group_row.get(db.B, group_row),   group) )
+    #                   , translator=gt
+    #                   )
+
+
+    return fv

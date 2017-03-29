@@ -12,6 +12,7 @@ def get_fields_from_table_format(format_str):
     results = re.findall(regex, format_str)
     return results
 
+
 def fields_are_equal(a, b):
     "workaround of quirk of Field/Expression, as explained https://groups.google.com/d/msg/web2py/LvR7mGFX7UQ/VN5H6AS-AQAJ"
     return str(a) == str(b)
@@ -33,6 +34,9 @@ def append_unique(A, b):
 def is_aggregate( expr ):
     if isinstance(expr, str):
         return # TODO : regexp to see if it has SUM AVERAGE COUNT...
+
+    if not hasattr(expr, 'op'):
+        return
 
     db = getattr(expr, 'db', current.db)  # target expression might be str type
     return expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]
@@ -83,30 +87,60 @@ def tidy_SQL(sql, wrap_PRE=True):
 
     return sql
 
+def get_sql_log(start=0, end=None):
+    sqls = None
+    for conn, info in DAL.get_instances().items():
+        if sqls  is None:
+            sqls = info['dbstats']
+        else:
+            sqls.extend( info['dbstats'] )
+
+    if start == 0 and  end is None:
+        return sqls
+
+    else:
+        if end is None:
+            end= len(sqls)
+        return sqls[start:end]
+
+
+def sql_log_format(sql_log):
+    return CAT(
+
+        TABLE(*[TR( tidy_SQL(row[0]),
+                    '%.2fms' % (row[1]*1000)
+                    )
+                    for row in sql_log
+                ])
+
+        , sql_log_style
+    )
+
+sql_log_style =   STYLE("""
+            table {width:95%}
+
+            pre {
+                padding: 5px;
+                line-height: 1.2em;
+            xwidth: 80%;
+            display: inline-block;
+            word-wrap: break-word;
+            word-break: break-all;
+                white-space: pre-wrap;
+                border : 1px silver solid;
+            }
+            """)
+
 def save_DAL_log(file='/tmp/web2py_sql.log.html'):
     dbstats = []
     dbtables = {}
     infos = DAL.get_instances()
     for k, v in infos.iteritems():
-        dbstats.append(TABLE(*[TR( tidy_SQL(row[0]), '%.2fms' % (row[1]*1000))
-                               for row in v['dbstats']]))
+        dbstats.append(  sql_log_format( v['dbstats']  ) )
         # dbtables[k] = dict(defined=v['dbtables']['defined'] or '[no defined tables]',
                            # lazy=v['dbtables']['lazy'] or '[no lazy tables]')
     
     with open(file, 'w') as f:
         f.write( str(DIV(*dbstats)) )
-        f.write(str( STYLE("""
-        table {width:95%}
-
-        pre {
-            padding: 5px;
-            line-height: 1.2em;
-        xwidth: 80%;
-        display: inline-block;
-        word-wrap: break-word;
-        word-break: break-all;
-            white-space: pre-wrap;
-            border : 1px silver solid;
-        }
-        """)) );
+        f.write(str( sql_log_style ) );
     
