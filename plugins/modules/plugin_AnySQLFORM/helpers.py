@@ -43,8 +43,11 @@ def is_aggregate( expr ):
                 # [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
 
 def is_reference(field):
-    ref_indicator = field.type.split()[0]
-    return ref_indicator in ['reference', 'list:reference']
+    try:
+        ref_indicator = field.type.split()[0]
+        return ref_indicator in ['reference', 'list:reference']
+    except:
+        pass
 
 def is_id(field):
     return str(field)==str(field.table._id) or is_reference(field)
@@ -73,7 +76,7 @@ def force_refs_represent_ordinary_int(rows):
 
 
 
-from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV
+from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV, B
 from gluon.dal import DAL
 
 
@@ -107,11 +110,15 @@ def get_sql_log(start=0, end=None):
 def sql_log_format(sql_log):
     return CAT(
 
-        TABLE(*[TR( tidy_SQL(row[0]),
+        TABLE(
+            TR(B("TOTAL TIME: "), B('%.2fms' % sum([row[1] * 1000 for row in sql_log]))),
+            *[TR( tidy_SQL(row[0]),
                     '%.2fms' % (row[1]*1000)
                     )
                     for row in sql_log
-                ])
+                ]
+
+              )
 
         , sql_log_style
     )

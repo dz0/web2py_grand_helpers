@@ -202,7 +202,7 @@ class GrandRegister( object ):
         self.w2ui_columns = []
         for f in self.columns:
             w2ui_col =  {
-                      'field': FormField(f).name, 'caption': f.label,
+                      'field': FormField(f).name, 'caption': getattr(f, 'label', None),
                       'size': "100%",
                       'sortable': isinstance(f, (Field, Expression)) or hasattr(f, 'orderby'),
                       'resizable': True

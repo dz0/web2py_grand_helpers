@@ -213,8 +213,12 @@ class FormField( Field ):
                 """
 
             else:  # for Field  (or Expression with name property)
-                new_name = field.name  # this is absent in Expression
-
+                if hasattr(field, 'name'):
+                    new_name = field.name  # this is absent in Expression
+                else:
+                    new_name = str(field)
+                    for char in '.()_,|&%\'\\:"= ':
+                        new_name = new_name.replace(char, '_')
 
         if type(field) == Field:   #  isinstance would be bug
             # if not hasattr(field, 'tablename'):

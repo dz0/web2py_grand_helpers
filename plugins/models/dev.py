@@ -7,7 +7,7 @@ track_changes(True)
 from gluon import current
 
 # Toggles limitby in DalView... for DBG purposes
-current.dev_limitby = 0, 20
+current.dev_limitby = 0, 10
 current.DBG = True
 
 # fake admin

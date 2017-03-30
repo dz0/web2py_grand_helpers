@@ -764,7 +764,6 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     cid = 'batches'
 
     db.warehouse_batch.good_id.widget = T_AutocompleteWidget( gt, request, db.good.title , id_field=db.good.id) # | db.category
-    db.warehouse_batch.good_id.widget = T_AutocompleteWidget( gt, request, db.subject_subject.title , id_field=db.subject_subject.id) # | db.category
 
     # AUTOCOMPLETE(
     #     db, auth, 'good', url=URL('warehouse', 'search_batch_goods'),
@@ -782,6 +781,8 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
         [db.good.category_id, db.warehouse_batch.supplier_id],
     ]
 
+    if request.vars._66_inside_Register:
+        return search_fields
 
     import itertools
     search_fields = itertools.chain(*search_fields)  # flatten
@@ -793,8 +794,8 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
         table_name='batches'
     )
 
-    # return  form
-    return dict(form=form)
+    return  form
+    # return dict(form=form)
 
 
 def test_66b_aggregate_warehouse_batches_Grid():
@@ -834,15 +835,15 @@ def test_66b_aggregate_warehouse_batches_Grid():
         return total
 
     total_field_v = Field.Virtual( 'total_field_v', f=_total_field, table_name='good' )
-    total_field_vagg = virtual_aggregate( 'total_field_vagg',
-        # ftype='decimal(10,2)',
+    # total_field_v.required_expressions = [db.warehouse_batch.good_id]
 
+    total_field_vagg = virtual_aggregate( 'total_field_vagg',
         # query=query,
         # query = db.warehouse_batch.good_id==271,
         groupby=db.warehouse_batch.good_id,  # expression used to group stuff (also will be column in select)
         # required_expressions=[db.warehouse_batch.ALL],  # cols in select
         required_expressions=[db.warehouse_batch.price, db.warehouse_batch.residual, db.warehouse_batch.currency_id, db.warehouse_batch.rate_date  ],  # cols in select
-        f_agg = lambda r, group:  str( D('0.00000')+sum(group) ),  # aggregation lambda
+        f_agg = lambda r, group:  sum(group) or D('0.00000')  ,  # aggregation lambda
         # f_agg = lambda r, group:  'bla',  # aggregation lambda
         # f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
         f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
@@ -853,13 +854,15 @@ def test_66b_aggregate_warehouse_batches_Grid():
     )
 
     columns = [
-        db.good.id
-        # , represent_PK( db.good.id ) # virtual Expression
+        db.good.id, db.warehouse_batch.id,
+        # db.good.id,
+        represent_PK( db.good.id ) # virtual Expression
         # , db.good.title
+        # , received_field
         # , received_field, reserved_field, used_field, residual_field  # aggregates
         # , total_field_v # ordinary virtual
-        , total_field_vagg # virtual aggregate
-        # , TOTAL_ROWS
+        # , total_field_vagg # virtual aggregate
+        , TOTAL_ROWS
     ]
 
     rows = select_with_virtuals(
@@ -867,27 +870,49 @@ def test_66b_aggregate_warehouse_batches_Grid():
         , translator = gt
         , left = [ db.warehouse_batch.on(db.warehouse_batch.good_id==db.good.id) ]
         # , left = build_joins_chain(db.good, db.warehouse_batch)
-        # , groupby =  db.good.title | db.good.sku  # figured out automatically
-        , limitby = (0,3)
+        # , groupby =  db.warehouse_batch.good_id #  should be figured out automatically
+        # , distinct = db.good.id
+        # , orderby = db.good.id|db.good.sku
+        , limitby = (0,10)
     )
 
     if hasattr(current, 'DBG') and current.DBG:
-        # from helpers import tidy_SQL
-        # current.session.sql_log = map(tidy_SQL, rows.sql_log)
-        current.session.sql_log = PRE(rows.sql_log)
-        current.session.sql_log_nontranslated = PRE(rows.sql_nontranslated_log)
-        save_DAL_log()
-    # return dict(rows=rows)
-    return rows
+        # current.session.sql_log = PRE(rows.sql_log)
+        # current.session.sql_log_nontranslated = PRE(rows.sql_nontranslated_log)
+        # save_DAL_log()
+        pass
 
-    """
-    SELECT  good.id, good.title, good.sku, good.type, good.measurement_id, good.group_id, good.category_id, good.note, good.active, good.packing_material, good.ean_code, good.cost, good.supply_term_for_offer, good.supply_term, good.use_group_wof, good.write_off_factor, good.length, good.width, good.height, good.net_weight, good.gross_weight, good.price, good.package_id, good.package_quantity, good.produced, good.color_id, good.price_list_settings_group_id, good.sketch_title, good.default_warehouse_id, good.default_cell_id, good.use_group_accountancy_code, good.accountancy_code, good.not_accounted, good.intrastat_code, good.intrastat_matches_good_group, COALESCE(translation_field.value,good.title), SUM(warehouse_batch.received), SUM(warehouse_batch.reserved), SUM(warehouse_batch.used), SUM(warehouse_batch.residual), COUNT(*) OVER()
-    FROM warehouse_batch JOIN good ON (good.id = warehouse_batch.good_id)
-    LEFT JOIN translation_field ON ((((translation_field.tablename = 'good') AND (translation_field.fieldname = 'title')) AND (translation_field.rid = good.id)) AND (translation_field.language_id = 1))
-    WHERE (warehouse_batch.warehouse_id IN (1))
-    GROUP BY good.id, COALESCE(translation_field.value,good.title)
-    ORDER BY SUM(warehouse_batch.residual) DESC LIMIT 50 OFFSET 0;
-    """
+    # return dict(rows=rows)
+    if request.vars._66_inside_Register:
+        return columns
+    return DIV( rows, PRE(rows.sql_log) )
+
+def test_66c_aggregate_warehouse_batches_Register():
+    request.vars._66_inside_Register = True
+    cols = test_66b_aggregate_warehouse_batches_Grid()
+    search_fields = test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget()
+
+    register = GrandRegister(cols,
+
+                             force_FK_table_represent=True,
+                             cid='batches',
+                             table_name='batches',
+                             search_fields=search_fields
+
+                             #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+
+                             # filters=filters  # fast filters
+                             # ,
+                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+
+                             , crud_controller='warehouse'  # or None for postback with default SQLFORM() behaviour
+
+                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             # _class = 'mobile_sqlform' if IS_MOBILE else None,
+
+                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             )
+    return register.render()
 
 def test_70_group_by_val():
     rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
@@ -1000,6 +1025,8 @@ def dbg():
     )
     if request.vars.clear_session:
         session.clear()
+        with open('/tmp/web2py_sql.log.html', 'w') as f:
+            pass
 
     if request.vars.refresh:
         redirect(URL())

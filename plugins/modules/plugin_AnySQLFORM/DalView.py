@@ -408,9 +408,11 @@ def agg_list_singleton(vfield, context_rows):
 
         rows_4grouping = selection.execute()
 
-
         grouped = rows_4grouping.group_by_value(groupby)  # todo: maybe use Rows.join(..) https://groups.google.com/forum/#!topic/web2py-developers/xpCJaD-GAcU
-        
+        # from collections import defaultdict
+        # grouped = defaultdict(list)
+        # grouped.update( rows_4grouping.group_by_value(groupby)  )
+
         # log sql
         if getattr(current, 'DBG', None):  # TODO change to LOG_SQL ?
             grouped = Storage( grouped )
@@ -542,7 +544,7 @@ def select_with_virtuals(*columns,  **kwargs):
                         if getattr(current, 'DBG', None) and first_row:
                             rows.sql_log.append( rows_4_aggregate.sql )
                             rows.sql_nontranslated_log.append( rows_4_aggregate.sql_nontranslated )
-                        group = rows_4_aggregate[group_id]
+                        group = rows_4_aggregate[group_id] or []
                         field.f = lambda r: field.aggregate.f(r, group) # is not called directly -- might be deleted?
                         # print 'dbg group', group
                         try:
@@ -663,9 +665,10 @@ def virtual_aggregate(  name,
     fv.f = None # workaround, as leaving f=None in args, would make "name" to be used as "f"...
 
     if f_group_item:
-        f_agg2 = f_agg # just in case - to prevent (possible?) recursion
-        f_agg = lambda row, group: f_agg2(  row,  map(f_group_item, group)    )  # apply aggregate function to  processed/represented items
-
+        f_agg1 = f_agg # just in case - to prevent (possible?) recursion
+        f_agg2 = lambda row, group: f_agg1(  row,  map(f_group_item, group)    )  # apply aggregate function to  processed/represented items
+        # f_agg3 = lambda row, group: None if group is None else f_agg2(row, group)   # automatically fallback to None if empty group
+        f_agg = f_agg2
 
     fv.required_expressions = [groupby]  # this should be available per group
 
