@@ -584,7 +584,7 @@ def select_with_virtuals(*columns,  **kwargs):
     rows.rawcolnames = rows.colnames
     rows.colnames = [str(col) for col in columns]
 
-    current.session.last_select_with_virtuals = sql_log_format ( get_sql_log( sql_log_start ) )
+    current.session.last_sql_with_virtuals = sql_log_format (get_sql_log(sql_log_start))
     return rows
 
     # TODO: maybe apply
@@ -610,11 +610,6 @@ def select_with_virtuals(*columns,  **kwargs):
             columns = [f for f in fields if f.tablename in tablenames]
 
 
-def grand_select(*args, **kwargs):
-    return select_with_virtuals(*args, **kwargs)
-    # return DalView(*args, **kwargs).execute()
-
-
 
 
 # class FieldVirtual_WithDependancies(Field.Virtual):
@@ -630,18 +625,30 @@ def grand_select(*args, **kwargs):
 #     # def __init__(self, name, f=None, ftype='string', label=None, table_name=None):
 #     #     Field.Virtual.__init__(self, name, f, ftype, label, table_name)
 
+def virtual_field(  name, f,
+                        ftype='string', label=None, table_name=None,  # standart Field.Virtual(..) kw_args
+                        required_expressions = None,  # cols in select
+                        required_joins = None
 
-def virtual_aggregate(  name,
-                        groupby, # expression used to group stuff (also will be column in select)
+                    ):
+    """field for select_with_virtuals, with `required_expressions` functionality """
+    fv = Field.Virtual(name, f, ftype=ftype, label=label, table_name=table_name)
+    fv.required_expressions = required_expressions or []
+    fv.required_joins = required_joins or []
+
+    return fv
+
+def virtual_aggregate_field(name,
+                            groupby,  # expression used to group stuff (also will be column in select)
                         required_expressions,  # cols in select
-                        f_agg,   # aggregation lambda
+                        f_agg,  # aggregation lambda
                         f_group_item=None,  # function applied to group item/row -- like f for ordinary Field.Virtual
 
                         ftype='string', label=None, table_name=None,  # standart Field.Virtual(..) kw_args
                         translator=None,
-                        query = None,
-                        **select__kwargs  # probably mostly needed will be 'left' join
-                      ):
+                            query = None,
+                            **select__kwargs  # probably mostly needed will be 'left' join
+                            ):
 
     """
     constructs Field.Virtual which can aggregate fields...

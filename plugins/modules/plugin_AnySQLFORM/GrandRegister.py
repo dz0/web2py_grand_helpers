@@ -569,3 +569,7 @@ class GrandSQLFORM(QuerySQLFORM):
             QuerySQLFORM.set_default_validator(self, f)
 
 
+
+def grand_select(*args, **kwargs):
+    return select_with_virtuals(*args, **kwargs)
+    # return DalView(*args, **kwargs).execute()

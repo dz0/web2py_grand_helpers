@@ -800,7 +800,7 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
 
 def test_66b_aggregate_warehouse_batches_Grid():
     # TODO
-    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals, virtual_aggregate
+    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals, virtual_aggregated_field
 
     gt = GrandTranslator(fields=[db.good.title], language_id=2) # helpers.get_fields_from_table_format(db.good)
 
@@ -837,7 +837,7 @@ def test_66b_aggregate_warehouse_batches_Grid():
     total_field_v = Field.Virtual( 'total_field_v', f=_total_field, table_name='good' )
     # total_field_v.required_expressions = [db.warehouse_batch.good_id]
 
-    total_field_vagg = virtual_aggregate( 'total_field_vagg',
+    total_field_vagg = virtual_aggregated_field( 'total_field_vagg',
         # query=query,
         # query = db.warehouse_batch.good_id==271,
         groupby=db.warehouse_batch.good_id,  # expression used to group stuff (also will be column in select)
@@ -960,6 +960,13 @@ def init_tables_AB():
                     )
     db.B.vf2.required_expressions=[db.A.f1]
     db.B.vf2.required_joins= [ db.A.on(db.B.A_id==db.A.id) ] # build_joins_chain(db.B, db.A)
+
+    # TODO: test:
+    # from plugin_AnySQLFORM import virtual_field
+    # db.B.vf2 = virtual_field( 'vf2', f=lambda r: "virtual:"+r.A.f1, table_name='B',
+    #                               required_expressions=[db.A.f1],
+    #                               required_joins= [ db.A.on(db.B.A_id==db.A.id) ]
+    # )
 
     db.A.truncate()
     db.B.truncate()
