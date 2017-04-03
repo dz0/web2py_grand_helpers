@@ -638,7 +638,7 @@ def virtual_field(  name, f,
 
     return fv
 
-def virtual_aggregate_field(name,
+def virtual_aggregated_field(name,
                             groupby,  # expression used to group stuff (also will be column in select)
                         required_expressions,  # cols in select
                         f_agg,  # aggregation lambda

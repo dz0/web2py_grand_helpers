@@ -862,7 +862,7 @@ def test_66b_aggregate_warehouse_batches_Grid():
         # , received_field, reserved_field, used_field, residual_field  # aggregates
         # , total_field_v # ordinary virtual
         # , total_field_vagg # virtual aggregate
-        , TOTAL_ROWS
+        # , TOTAL_ROWS # +' as total '
     ]
 
     rows = select_with_virtuals(

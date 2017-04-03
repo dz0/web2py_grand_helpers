@@ -76,8 +76,9 @@
                         }
 
                     },
-                    {{ if w2grid_options_extra: 
-                        =w2grid_options_extra
+                    // w2grid_options_extra (optional)
+                    {{ if w2grid_options_extra:
+                        =XML(simplejson.dumps(w2grid_options_extra, default=custom_json, indent=4).strip('{}') )
                     pass }}
                     
             {{ end }}

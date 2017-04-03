@@ -3,6 +3,7 @@
 # from gluon import current
 from AnySQLFORM import *
 from gluon.html import URL, A, CAT, DIV, BEAUTIFY, PRE
+from modules.helpers import TOTAL_ROWS
 
 from DalView import *
 from GrandTranslator import *
@@ -123,6 +124,8 @@ class GrandRegister( object ):
                         break
         init_recid()
 
+
+
         def init_crud_actions():
             self.w2ui_kwargs.crud_urls = self.crud_urls = Storage(kwargs.pop('crud_urls', {}))
             crud_controller = kwargs.pop('crud_controller', 'external')
@@ -151,6 +154,7 @@ class GrandRegister( object ):
                 if is_reference( col ):
                     columns[nr] = represent_FK( col )
 
+        self.columns.append( TOTAL_ROWS )
 
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
@@ -202,7 +206,7 @@ class GrandRegister( object ):
         self.w2ui_columns = []
         for f in self.columns:
             w2ui_col =  {
-                      'field': FormField(f).name, 'caption': getattr(f, 'label', None),
+                      'field': FormField(f).name, 'caption': getattr(f, 'label', str(f)),
                       'size': "100%",
                       'sortable': isinstance(f, (Field, Expression)) or hasattr(f, 'orderby'),
                       'resizable': True
@@ -217,16 +221,20 @@ class GrandRegister( object ):
         self.w2ui_colnames = [d['field'] for d in self.w2ui_columns]  # parallely alligned to columns
         self.colnames = [ str(col) for col in self.columns ]          # parallely alligned to columns
 
+        self.map_w2uinames_2_columns = dict(zip(self.w2ui_colnames, self.columns))
+        
+        self.map_colnames_2_w2uinames = dict(zip( self.colnames, self.w2ui_colnames))
+
         if getattr(self, 'w2ui_sort', None) is None: # if not set or set to None
             self.w2ui_sort = [{'field': self.w2ui_colnames[0] }]
 
         for sorter in self.w2ui_sort:
             sorter.setdefault('direction', "asc")
 
+        # self.w2ui_kwargs['w2grid_options_extra']= dict(autoLoad=False ) # dbg
+
         context = dict(
-
-            w2ui_columns=self.w2ui_columns,
-
+            w2ui_columns=self.w2ui_columns[:-1],  # remove TOTAL_ROWS from end...
             # w2ui_sort=self.w2ui_sort ,  # w2ui_sort = [  {'field': w2ui_colname(db.auth_user.username), 'direction': "asc"} ]
 
             # moved to w2ui_kwargs:
@@ -236,10 +244,12 @@ class GrandRegister( object ):
             # data_name=self.data_name ,
             **self.w2ui_kwargs   # **self.kwargs
 
+
             # ,dbg = response.toolbar()
         )
 
         context.update(self.kwargs)
+
 
         return context
 
@@ -271,35 +281,45 @@ class GrandRegister( object ):
         response = current.response
 
         if request.vars._grid:
+            cmd = request.vars.cmd
 
-            rows = self.w2ui_grid_records()
-            result = dict(status='success', records=rows)  # TODO: error, etc...
+            status = 'success'
 
-            # response.view = "generic.json"
-            # return json(dict(status='success', records = rows ))
-            # from gluon.serializers import json
-            # raise HTTP( 200,  response.render("generic.json", result) )
-            if getattr(current, 'DBG', False):
-                save_DAL_log()
+            if cmd == 'get-records':
 
-            return  response.json( result )
-            # raise HTTP( 200,  response.json( result ) )
+                rows = self.w2ui_grid_records()
+                TOTAL_ROWS_w2i = self.map_colnames_2_w2uinames[TOTAL_ROWS]
+                total = rows[0][TOTAL_ROWS_w2i] if rows else 0
+                result =  {'status': status, 'total': total, 'records': rows}
 
-        elif request.args(0) in ['add', 'edit']:  # default CRUD actions
-            action = request.args(0)
-            table = self.recid.table
-            if action=='add':
-                form = SQLFORM(table)
-                form.process()
-                raise HTTP(200, form=form)  # for ajax request
-            if action=='edit':
-                view_extension = request.vars.view_extension
-                record = table(request.args(1)) # or redirect(..)
-                form = SQLFORM( table , record )
-                form.process()
+                # result = dict(status='success', records=rows)  # TODO: error, etc...
 
-                return response.render('core/base_form.html', dict(form=form, row_buttons=None)) # for full request
-                # raise HTTP(200, response.render('core/base_form.html', dict(form=form, row_buttons=None))) # for full request
+                # response.view = "generic.json"
+                # return json(dict(status='success', records = rows ))
+                # from gluon.serializers import json
+                # raise HTTP( 200,  response.render("generic.json", result) )
+                if getattr(current, 'DBG', False):
+                    save_DAL_log()
+
+                return  response.json( result )
+                # raise HTTP( 200,  response.json( result ) )
+
+            elif request.args(0) in ['add', 'edit']:  # default CRUD actions
+                action = request.args(0)
+                table = self.recid.table
+                if action=='add':
+                    form = SQLFORM(table)
+                    form.process()
+                    raise HTTP(200, form=form)  # for ajax request
+
+                if action=='edit':
+                    view_extension = request.vars.view_extension
+                    record = table(request.args(1)) # or redirect(..)
+                    form = SQLFORM( table , record )
+                    form.process()
+
+                    return response.render('core/base_form.html', dict(form=form, row_buttons=None)) # for full request
+                    # raise HTTP(200, response.render('core/base_form.html', dict(form=form, row_buttons=None))) # for full request
 
             # if form.process().accepted:
             #     response.flash = 'form accepted'
@@ -345,11 +365,9 @@ class GrandRegister( object ):
 
         if 'sort' in extra:
 
-            map_w2ui_2_columns = dict(zip(self.w2ui_colnames, self.columns))
-
             fields_mapping = {}
             for w2ui_name in self.w2ui_colnames:
-                column = map_w2ui_2_columns[ w2ui_name ]
+                column = self.map_w2uinames_2_columns[ w2ui_name ]
                 if hasattr(column, 'orderby'):
                     fields_mapping[w2ui_name] = column.orderby  # for virtrual fields
                 elif isinstance(column, Field.Virtual) and hasattr(column, 'required_fields'):
@@ -458,14 +476,15 @@ class GrandRegister( object ):
         #     return  { d['name_in_w2ui'] : row_flat[ d['name_in_db'] ] for d in list_of_colnames_map }
         # rows =  [ exec_map_w2ui_colnames( row)   for row in rows ]
 
-        map_colnames_2_w2ui = dict( zip(self.colnames, self.w2ui_colnames ) )
+        # map_colnames_2_w2ui = dict( zip(self.colnames, self.w2ui_colnames ) )
 
         records =  [ ]
 
         recid_str = str(self.recid) # add w2ui recID
 
         for row in rows:
-            r = {  map_colnames_2_w2ui[colname]:  row[ colname ]       for colname in self.colnames }
+            # r = {  map_colnames_2_w2ui[colname]:  row[ colname ]       for colname in self.colnames }
+            r = {  self.map_colnames_2_w2uinames[colname]:  row[ colname ]       for colname in self.colnames    }
             r['recid'] = row[recid_str]
             records.append( r )
 
