@@ -10,6 +10,8 @@ from GrandTranslator import *
 # from pydal._globals import DEFAULT
 
 from helpers import get_fields_from_table_format, save_DAL_log, is_reference
+from lib.w2ui import serialized_lists, make_orderby, save_export
+
 
 def get_grid_kwargs(self):
         return "TODO"
@@ -290,27 +292,61 @@ class GrandRegister( object ):
             cmd = request.vars.cmd
 
             status = 'success'
+            if cmd in ('get-records', 'export-records'):
+                if not current.auth.has_permission('list', 'warehouse_batch'):
+                    return response.json( {'status': 'error', 'message': current.MSG_NO_PERMISSION + ": %s %s %s" %('delete', self.table_name, current.auth)}  )
 
-            if cmd == 'get-records':
 
-                rows = self.w2ui_grid_records()
-                TOTAL_ROWS_w2i = self.map_colnames_2_w2uinames[TOTAL_ROWS]
-                total = rows[0][TOTAL_ROWS_w2i] if rows else 0
-                result =  {'status': status, 'total': total, 'records': rows}
+                records = self.w2ui_grid_records()
 
-                # result = dict(status='success', records=rows)  # TODO: error, etc...
+                if cmd == 'get-records':
 
-                # response.view = "generic.json"
-                # return json(dict(status='success', records = rows ))
-                # from gluon.serializers import json
-                # raise HTTP( 200,  response.render("generic.json", result) )
+                    TOTAL_ROWS_w2i = self.map_colnames_2_w2uinames[TOTAL_ROWS]
+                    total = records[0][TOTAL_ROWS_w2i] if records else 0
+                    result =  {'status': status, 'total': total, 'records': records}
 
-                # if getattr(current, 'DBG', False):
-                #     save_DAL_log()
+                    # if getattr(current, 'DBG', False):
+                    #     save_DAL_log()
 
-                return  response.json( result )
-                # raise HTTP( 200,  response.json( result ) )
+                    return  response.json( result )
 
+                elif cmd == 'export-records':
+                    selected_w2ui_colnames = request.vars.getlist('columns[]')
+                    # TODO FIXME: optimize -- in DB query limit the selected columns!
+                    selected_w2ui_columns = [c for c in self.w2ui_columns if c['field'] in selected_w2ui_colnames]
+
+                    data = [ [col['caption'] for col in selected_w2ui_columns ] ]
+                    for r in records:
+                        data.append([r[ colname ] for colname in selected_w2ui_colnames])
+
+                    save_export(self.cid, data)
+                    return response.json( {'status': status} )
+
+                elif cmd == 'delete-records':
+                    if not current.auth.has_permission('delete', self.table_name):
+                        return {'status': 'error', 'message': current.MSG_NO_PERMISSION + ": %s %s %s" %('delete', self.table_name, current.auth) }
+
+                    selected = request.vars.getlist('selected[]')
+                    try:
+                        for s in selected:
+                            del db[self.table_name][s]  # TODO: optimize with belongs..
+                            # delete_field_translations(db, db[self.table_name], rid=s) # TODO: if needed
+
+                            # from some use-case..
+                            # record = db.purchase_order(s)
+                            # if _is_deletable(record):
+                            #     del db.purchase_order[s]
+                            #     log_changes(db, 'purchase_order', s, old_record=record,
+                            #                 label='purchase_order__delete_form',
+                            #                 fields=['number'])
+                    except:
+                        db.rollback()
+                        return response.json( {'status': 'error', 'message': current.MSG_ACTION_FAILED} )
+
+                    return response.json( {'status': status} )
+
+
+            # modifying actions
             elif request.args(0) in ['add', 'edit']:  # default CRUD actions
                 action = request.args(0)
                 table = self.recid.table
@@ -333,7 +369,7 @@ class GrandRegister( object ):
             # elif form.errors:
             #     response.flash = 'form has errors'
 
-
+        # default initial register (search_form + grid)
         else:
             # raise HTTP(200, response.render(self.response_view, self.form() ) )
             return  response.render(self.response_view, self.form() ) # ?
@@ -366,8 +402,6 @@ class GrandRegister( object ):
     def w2ui_get_orderby(self):
         request = current.request
         db = current.db
-
-        from lib.w2ui import serialized_lists, make_orderby #, save_export,
         extra = serialized_lists(request.vars)  # sort, search
 
         if 'sort' in extra:

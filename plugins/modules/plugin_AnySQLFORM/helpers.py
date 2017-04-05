@@ -90,14 +90,14 @@ def tidy_SQL(sql, wrap_PRE=True):
 
     return sql
 
-def sql_log_find_pos( item ):  # to find item from end (if it was not trimmed depending on TIMINGSSIZE)
+def sql_log_find_last_pos( item ):  # to find item from end (if it was not trimmed depending on TIMINGSSIZE)
     log = get_sql_log()
 
     for nr in range(len(log)-1, -1, -1):
         if item is log[nr]:
-            break
+            return nr
 
-    return nr
+    return -1
 
 def get_sql_log(start=0, end=None):
     # sqls = None

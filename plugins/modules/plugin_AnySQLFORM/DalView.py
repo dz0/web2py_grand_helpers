@@ -4,7 +4,7 @@ from pydal.objects import Field, Row, Expression
 from gluon.html import PRE
 
 from helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
-from helpers import sql_log_format, get_sql_log, save_DAL_log, sql_log_find_pos, set_TIMINGSSIZE
+from helpers import sql_log_format, get_sql_log, save_DAL_log, sql_log_find_last_pos, set_TIMINGSSIZE
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -612,7 +612,7 @@ def select_with_virtuals(*columns,  **kwargs):
     rows.rawcolnames = rows.colnames
     rows.colnames = [str(col) for col in columns]
 
-    sql_log_start = sql_log_find_pos( sql_log_marker_item  ) + 1
+    sql_log_start = sql_log_find_last_pos( sql_log_marker_item  ) + 1
     current.session.last_sql_with_virtuals = sql_log_format (get_sql_log(sql_log_start))
 
     if log:
