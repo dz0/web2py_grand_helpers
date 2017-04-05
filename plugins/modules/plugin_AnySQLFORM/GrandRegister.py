@@ -154,8 +154,6 @@ class GrandRegister( object ):
                 if is_reference( col ):
                     columns[nr] = represent_FK( col )
 
-        self.columns.append( TOTAL_ROWS )
-
         self.left_join_chains = left_join_chains  # probably would be enough
         self.search_fields = search_fields
         # self.search_fields.append( SearchField('grid') )
@@ -203,10 +201,18 @@ class GrandRegister( object ):
         # response.subtitle = "test  w2ui_grid"
         # response.menu = response.menu or []
 
+        self.columns.append( TOTAL_ROWS )
+
         self.w2ui_columns = []
         for f in self.columns:
+            caption = getattr(f, 'label', str(f))
+            try:
+                if caption.lower() == f.table._id.name.lower(): caption = str(f).replace('.', ' ').title()
+            except Exception as e: print "Warning in w2ui_grid_init:", e
+
             w2ui_col =  {
-                      'field': FormField(f).name, 'caption': getattr(f, 'label', str(f)),
+                      'field': FormField(f).name,
+                      'caption': caption,
                       'size': "100%",
                       'sortable': isinstance(f, (Field, Expression)) or hasattr(f, 'orderby'),
                       'resizable': True
@@ -298,8 +304,9 @@ class GrandRegister( object ):
                 # return json(dict(status='success', records = rows ))
                 # from gluon.serializers import json
                 # raise HTTP( 200,  response.render("generic.json", result) )
-                if getattr(current, 'DBG', False):
-                    save_DAL_log()
+
+                # if getattr(current, 'DBG', False):
+                #     save_DAL_log()
 
                 return  response.json( result )
                 # raise HTTP( 200,  response.json( result ) )

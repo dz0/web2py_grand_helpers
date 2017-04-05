@@ -90,13 +90,25 @@ def tidy_SQL(sql, wrap_PRE=True):
 
     return sql
 
+def sql_log_find_pos( item ):  # to find item from end (if it was not trimmed depending on TIMINGSSIZE)
+    log = get_sql_log()
+
+    for nr in range(len(log)-1, -1, -1):
+        if item is log[nr]:
+            break
+
+    return nr
+
 def get_sql_log(start=0, end=None):
-    sqls = None
-    for conn, info in DAL.get_instances().items():
-        if sqls  is None:
-            sqls = info['dbstats']
-        else:
-            sqls.extend( info['dbstats'] )
+    # sqls = None
+    # for conn, info in DAL.get_instances().items():
+    #     if sqls  is None:
+    #         sqls = info['dbstats']
+    #     else:
+    #         sqls.extend( info['dbstats'] )
+
+    db = current.db
+    sqls = db._timings
 
     if start == 0 and  end is None:
         return sqls
@@ -112,10 +124,10 @@ def sql_log_format(sql_log):
 
         TABLE(
             TR(B("TOTAL TIME: "), B('%.2fms' % sum([row[1] * 1000 for row in sql_log]))),
-            *[TR( tidy_SQL(row[0]),
+            *[TR( nr+1, tidy_SQL(row[0]),
                     '%.2fms' % (row[1]*1000)
                     )
-                    for row in sql_log
+                    for nr, row in enumerate(sql_log)
                 ]
 
               )
@@ -138,16 +150,25 @@ sql_log_style =   STYLE("""
             }
             """)
 
-def save_DAL_log(file='/tmp/web2py_sql.log.html'):
-    dbstats = []
-    dbtables = {}
-    infos = DAL.get_instances()
-    for k, v in infos.iteritems():
-        dbstats.append(  sql_log_format( v['dbstats']  ) )
-        # dbtables[k] = dict(defined=v['dbtables']['defined'] or '[no defined tables]',
-                           # lazy=v['dbtables']['lazy'] or '[no lazy tables]')
-    
-    with open(file, 'w') as f:
-        f.write( str(DIV(*dbstats)) )
+def set_TIMINGSSIZE(n):
+    import pydal.adapters.base as _
+    _.TIMINGSSIZE = n
+
+def save_DAL_log(file='/tmp/web2py_sql.log.html', mode='w', flush=False):
+    # dbstats = []
+    # dbtables = {}
+    # infos = DAL.get_instances()
+    # for k, v in infos.iteritems():
+    #     dbstats.append(  sql_log_format( v['dbstats']  ) )
+    #     # dbtables[k] = dict(defined=v['dbtables']['defined'] or '[no defined tables]',
+    #                        # lazy=v['dbtables']['lazy'] or '[no lazy tables]')
+
+    timings = current.db._timings
+
+    dbstats = sql_log_format( timings )
+    with open(file, mode) as f:
+        f.write( str(  dbstats  ) )
         f.write(str( sql_log_style ) );
-    
+
+    if flush:
+        del timings[:]

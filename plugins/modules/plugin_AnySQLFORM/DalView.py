@@ -4,7 +4,7 @@ from pydal.objects import Field, Row, Expression
 from gluon.html import PRE
 
 from helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
-from helpers import sql_log_format, get_sql_log
+from helpers import sql_log_format, get_sql_log, save_DAL_log, sql_log_find_pos, set_TIMINGSSIZE
 
 ####### DALSELECT ##########
 from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
@@ -146,7 +146,7 @@ class DalView(Storage):
 
             # skip or warn for Window functions
             if isinstance(f, str):
-                print "Warning:  %r in missing_groupby_on_aggregate is string -- error if it is window function.   If needed columns as str  should be listed in groupby manually" % f
+                print "Warning:  %r in missing_groupby_on_aggregate is string.   If needed it should be listed in groupby manually" % f
                 continue
 
             if not str(f) in map(str, aggregate_fields+groupby_fields):  # todo maybe optimize str mapping
@@ -282,7 +282,9 @@ class DalView(Storage):
 
         return tidy_SQL(sql, wrap_PRE=False)
 
-    def execute(self, translate='transparent' or True or False ): # usuall select
+    def execute(self, translate='transparent' or True or False, log=False ): # usuall select
+        db = current.db
+
         self.guarantee_table_in_query()
         t = self.translate_expressions()
         if translate and t:
@@ -290,7 +292,11 @@ class DalView(Storage):
             if getattr(current, 'DBG', False):
                 print "\nDBG Bare sql:\n",    self.get_sql(translate=False, t=t)
                 print "\nDBG Translated sql:\n", self.get_sql(translate=True, t=t)
+
+            if log:        saved_debug, db._debug = db._debug, True
             trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
+            if log:        db._debug = saved_debug
+
             # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
                 map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.columns) if str(t)!=str(f) } # todo: maybe use trows.parse
@@ -303,7 +309,10 @@ class DalView(Storage):
                 trows.compact = True
             return trows
         else:
+            if log:        saved_debug, db._debug = db._debug, True
             rows = self.db(self.query).select(*self.columns, **self.kwargs_4select())
+            if log:        db._debug = saved_debug
+
             # rows.compact = compact
             return rows
 
@@ -311,7 +320,7 @@ class DalView(Storage):
 ################ Virtual Fields in SELECT ####################
 ## with extension to have attrs: required_expressions, required_joins (means left joins)
 
-def represent_table_asVirtualField(tablename):
+def represent_table_asVirtualField(tablename, **kwargs):
     """virtual field to represent table's record by format"""
     db = current.db
 
@@ -326,11 +335,16 @@ def represent_table_asVirtualField(tablename):
 
     vfield.required_expressions = [db[target_table][f] for f in get_fields_from_table_format(fmt)]
     vfield.orderby = reduce(lambda a, b: a|b, vfield.required_expressions )
+    vfield.table = db[tablename]
 
+    attrs_to_be_overriden = set(['required_expressions', 'orderby']) & set(kwargs.keys())
+    if attrs_to_be_overriden:
+        raise RuntimeWarning( "override of important attributes: %s" % attrs_to_be_overriden  ) # todo: update conflicting keys instead
+    vfield.__dict__.update( kwargs ) # could override
     return vfield
 
 
-def represent_FK(fk_field):
+def represent_FK(fk_field, **kwargs):
     """virtual field to represent foreign key (by joined table's format)"""
 
     # from helpers import is_reference
@@ -341,7 +355,7 @@ def represent_FK(fk_field):
 
     target_table = fk_field.type.split()[1]
 
-    vfield = represent_table_asVirtualField(target_table)
+    vfield = represent_table_asVirtualField(target_table, **kwargs)
     vfield.label = fk_field.label  # use label of referencing field
     vfield.tablename = fk_field.tablename  # mark, that we use the FK table
 
@@ -353,12 +367,15 @@ def represent_FK(fk_field):
     return vfield
 
 
-def represent_PK(pk_field):
+def represent_PK(pk_field, **kwargs):
     """virtual field to represent private key (by table's format)"""
+
+    # if isinstance(pk_field, Table):
+    #     pk_field = pk_field._id
 
     target_table = pk_field.tablename
 
-    return represent_table_asVirtualField(target_table)
+    return represent_table_asVirtualField(target_table, **kwargs)
 
 
 
@@ -447,8 +464,18 @@ def select_with_virtuals(*columns,  **kwargs):
     nonshown: [ A.f1 ]
 
     """
+    db = current.db
 
-    sql_log_start = len( get_sql_log() )
+    log = getattr(current, 'DBG', None)
+    if log:
+
+        saved_debug, db._debug = db._debug, True
+        # set_TIMINGSSIZE(1000)
+        # save_DAL_log(flush=True) # might be:
+
+    sql_log = get_sql_log()
+    sql_log_start = len( sql_log )
+    sql_log_marker_item = sql_log[-1]
 
     delete_nonshown = kwargs.pop('delete_nonshown', True)
 
@@ -516,7 +543,8 @@ def select_with_virtuals(*columns,  **kwargs):
     translator= kwargs.pop('translator', None)  # TODO -- USE default translator
     selection = DalView( *(selectable+nonshown), translator=translator, query=query,  **kwargs )
     rows = selection.execute()
-    if current.DBG:
+
+    if getattr(current, 'DBG', None):
         rows.sql = selection.get_sql()
         rows.sql_nontranslated = selection.get_sql(translate=False)
         rows.sql_log = [ rows.sql ]
@@ -584,7 +612,13 @@ def select_with_virtuals(*columns,  **kwargs):
     rows.rawcolnames = rows.colnames
     rows.colnames = [str(col) for col in columns]
 
+    sql_log_start = sql_log_find_pos( sql_log_marker_item  ) + 1
     current.session.last_sql_with_virtuals = sql_log_format (get_sql_log(sql_log_start))
+
+    if log:
+        db._debug = saved_debug;
+        save_DAL_log(mode='a', flush=False)
+
     return rows
 
     # TODO: maybe apply

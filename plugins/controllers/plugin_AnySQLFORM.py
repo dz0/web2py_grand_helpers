@@ -6,7 +6,7 @@ from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
 from plugin_AnySQLFORM.GrandRegister import GrandRegister, grand_select
 from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
-from plugin_AnySQLFORM.DalView import DalView, represent_FK
+from plugin_AnySQLFORM.DalView import DalView
 
 from plugin_AnySQLFORM.helpers import save_DAL_log
 
@@ -408,8 +408,12 @@ def test_60_subjects_country_joins_chain():
     # join_expr= build_joins_chain( db.subject_subject, db.subject_address, db.address_address, db.address_country)
     # return str(join_expr)
 
+from plugin_AnySQLFORM.DalView import represent_PK, represent_FK, select_with_virtuals, virtual_aggregated_field
+from plugin_AnySQLFORM.helpers import save_DAL_log
+
 def test_60_grand_select_subjects():
     pass
+
 
 # @auth.requires_permission('list', 'subject_subject')
 def test_62_granderp_subjects():
@@ -527,10 +531,7 @@ def test_63b_represent_FK_virtual():
     # rows = grand_select( vf ) # TODO : test some renderign...
     rows = grand_select( db.good.id,  fk_field, vf , db.good.category_id )
 
-
-    from plugin_AnySQLFORM.helpers import save_DAL_log, force_refs_represent_ordinary_int
-
-    force_refs_represent_ordinary_int(rows)
+    # force_refs_represent_ordinary_int(rows)
 
     save_DAL_log()
     # return rows
@@ -575,7 +576,7 @@ def test_63d_granderp_good_goods_representFK():
 
     db.good.category_id.represent = None
     cols=[
-        # db.good.id,
+        represent_PK( db.good.id ),
         represent_FK( db.good.group_id ),
         # db.good.group_id,
         db.good.type,
@@ -655,6 +656,7 @@ def test_63e_granderp_good_goods():
 
     # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
     cols=[
+        represent_PK( db.good.id, label="Prekė"),
         db.good.category_id,
         # represent_FK( db.good.group_id ),
         db.good.group_id,  # by default will apply represent_FT
@@ -687,7 +689,9 @@ def test_63e_granderp_good_goods():
 
                              # ,w2grid_options_extra_toolbar_extra = "BLA"
                              )
-    return register.render()
+    result = register.render()
+    # save_DAL_log()
+    return result
 
 def test_70_AnySQLFORM_edit():
     table = db.auth_user
@@ -799,8 +803,6 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
 
 
 def test_66b_aggregate_warehouse_batches_Grid():
-    # TODO
-    from plugin_AnySQLFORM.DalView import represent_PK, select_with_virtuals, virtual_aggregated_field
 
     gt = GrandTranslator(fields=[db.good.title], language_id=2) # helpers.get_fields_from_table_format(db.good)
 
@@ -808,11 +810,6 @@ def test_66b_aggregate_warehouse_batches_Grid():
     status = 'success'
     cmd = request.vars.cmd
 
-    # good_title_field = db.translation_field.value.coalesce(db.good.title)
-    received_field = db.warehouse_batch.received.sum()
-    reserved_field = db.warehouse_batch.reserved.sum()
-    used_field = db.warehouse_batch.used.sum()
-    residual_field = db.warehouse_batch.residual.sum()
 
     from lib.branch import allowed_warehouse_ids, allowed_warehouses_query
     warehouse_ids = allowed_warehouse_ids(db, auth, active=None, as_list=True) or [0]
@@ -854,16 +851,22 @@ def test_66b_aggregate_warehouse_batches_Grid():
     )
 
     columns = [
-        db.good.id, db.warehouse_batch.id,
         # db.good.id,
         represent_PK( db.good.id ) # virtual Expression
-        # , db.good.title
-        # , received_field
-        # , received_field, reserved_field, used_field, residual_field  # aggregates
+        , db.good.title
+        # , db.warehouse_batch.id  # for dbg purposes
+        #
+        ,db.warehouse_batch.received.sum()
+        ,db.warehouse_batch.reserved.sum()
+        ,db.warehouse_batch.used.sum()
+        ,db.warehouse_batch.residual.sum()
+
         # , total_field_v # ordinary virtual
-        # , total_field_vagg # virtual aggregate
-        # , TOTAL_ROWS # +' as total '
+        , total_field_vagg # virtual aggregate
     ]
+
+    if request.vars._66_inside_Register:
+        return columns
 
     rows = select_with_virtuals(
         *columns
@@ -883,8 +886,7 @@ def test_66b_aggregate_warehouse_batches_Grid():
         pass
 
     # return dict(rows=rows)
-    if request.vars._66_inside_Register:
-        return columns
+
     return DIV( rows, PRE(rows.sql_log) )
 
 def test_66c_aggregate_warehouse_batches_Register():
@@ -900,10 +902,11 @@ def test_66c_aggregate_warehouse_batches_Register():
                              search_fields=search_fields
 
                              #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+                             , left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
 
                              # filters=filters  # fast filters
                              # ,
-                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+                             # , translator=gt   # GrandTranslator( fields = [db.good.title], language_id=2 )
 
                              , crud_controller='warehouse'  # or None for postback with default SQLFORM() behaviour
 
