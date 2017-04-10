@@ -111,7 +111,6 @@ class GrandRegister( object ):
                     # left_join_chains=None,  # probably would be enough (or [[]])
                     dalview_left_join_chains = None,
                     # table_name=None,
-                    auth_data_name=None,  # TODO auth_data_name ?
                     dalview_table_name = None,
 
                  # SEARCH
@@ -128,17 +127,22 @@ class GrandRegister( object ):
                  #    grid_columns = None,
                     grid_recid = None,
                     grid_columns_options = None, # dict: colname: { ..options..}
-                    grid_options_sort = None,
                     grid_columns_force_FK_table_represent=False,
-                    grid_options_extra = {},
+                    # grid_options_sort = None,
+                    # grid_options_extra = {},
+                    grid_data_name=None,  # TODO auth_data_name ?
 
+                 grid_w2ui_sort=None,
+                 grid_w2ui_options_extra={},
+                 grid_w2ui_options_extra_toolbar_extra=None,
+                 # grid_function, --> crud_url_Records
 
-                    # CRUD : actions/commands  Grid/Edit/Add/Import/...
-                    crud_url_Records = None,
+                 # CRUD : actions/commands  Grid/Edit/Add/Import/...
+                    crud_url_Records = None, # ex: grid_function
                     crud_url_Add = None,
                     crud_url_Edit = None,
                     crud_url_Import = None,
-
+                    crud_controller=None,
                  # end REFACTORed args
 
                  **kwargs  # form_factory
@@ -206,20 +210,48 @@ class GrandRegister( object ):
 
         __init__NG()
 
+        # COLUMNS stuff
+        self.columns = get_arg('grid', 'columns') or kwargs.get('columns')
+
+        def init_table_name_and_recid():
+            db = current.db
+
+            main_table = None
+            for col in self.columns:
+                if hasattr(col, 'tablename'):
+                    main_table = col.tablename
+                    break
+
+            self.table_name = self.args.dalview.table_name = get_arg('dalview', 'table_name') or main_table
+
+            # record id field (or expression?)
+            self.recid = get_arg('grid', 'recid')
+            if not self.recid:
+                main_table = get_arg('dalview', 'table_name')
+                self.recid = db[main_table]._id
+                print "DBG, recid", self.recid
+                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
+            else:
+                if self.recid.tablename != self.table_name:
+                    raise RuntimeError("recid   doesn't match  table_name:  %r   %r" % (self.recid, self.table_name) )
+
+        init_table_name_and_recid()
+
         def init_w2ui_kwargs():
             # for w2ui_grid response_view
             self.w2ui_kwargs = Storage()
             self.w2ui_kwargs.cid           = self.cid           =  cid or request.function
-            self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
-            self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  kwargs.pop('w2ui_sort', None)
-            self.w2ui_kwargs.w2grid_options_extra_toolbar_extra =  kwargs.pop('w2grid_options_extra_toolbar_extra', None)
+            self.w2ui_kwargs.grid_function = self.grid_function =  get_arg('grid', 'function') or request.function # or get_arg('crud', 'url_Records') ?
+            self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  get_arg('grid', 'w2ui_sort')
 
             # self.w2ui_kwargs.table_name    = self.table_name    =  table_name or  columns[0].tablename
-            self.args.dalview.table_name = self.w2ui_kwargs.table_name    = self.table_name    =  dalview_table_name or kwargs.get('table_name') or  columns[0].tablename
-            self.args.auth.data_name = self.w2ui_kwargs.data_name     = self.data_name     =  auth_data_name  or kwargs.get('data_name') or  self.table_name or request.controller
+            self.args.dalview.table_name = self.w2ui_kwargs.table_name    = self.table_name
+            self.w2ui_kwargs.data_name     = self.data_name     =  get_arg('grid', 'data_name') or  self.table_name or request.controller
             # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
 
-            self.w2ui_kwargs.w2grid_options_extra  =  kwargs.pop('w2grid_options_extra', {} )
+            self.w2ui_kwargs.w2ui_options_extra = get_arg('grid', 'w2ui_options_extra')
+            self.w2ui_kwargs.w2ui_options_extra_toolbar_extra = get_arg('grid', 'w2ui_options_extra_toolbar_extra')
+
         init_w2ui_kwargs()
 
 
@@ -247,21 +279,6 @@ class GrandRegister( object ):
 
         self.response_view = response_view
 
-        self.columns = get_arg('grid', 'columns') or kwargs.get('columns')
-
-        def init_recid():
-            db = current.db
-            # record id field (or expression?)
-            self.recid = grid_recid or kwargs.get('recid')
-            if not self.recid:
-                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
-                for col in self.columns:
-                    if hasattr(col, 'tablename'):
-                        main_table = db[ col.tablename ]
-                        self.recid = main_table._id
-                        print "DBG, recid", self.recid
-                        break
-        init_recid()
 
         self.force_FK_table_represent = kwargs.get('force_FK_table_represent') or get_arg('grid', 'columns_force_FK_table_represent')
         if self.force_FK_table_represent:
@@ -311,7 +328,7 @@ class GrandRegister( object ):
         # self.search_fields_update_triggers                    # TODO: for ReactiveForm
 
 
-    def w2ui_grid_init(self):
+    def w2ui_init(self):
         # some workarounds for grand core stuff
         # TODO: maybe refactor to separate W2ui_grid class?..
 
@@ -330,7 +347,7 @@ class GrandRegister( object ):
             caption = getattr(f, 'label', str(f))
             try:
                 if caption.lower() == f.table._id.name.lower(): caption = str(f).replace('.', ' ').title()
-            except Exception as e: print "Warning in w2ui_grid_init:", e
+            except Exception as e: print "Warning in w2ui_init:", e
 
             w2ui_col =  {
                       'field': FormField(f).name,
@@ -383,7 +400,7 @@ class GrandRegister( object ):
 
     def form(self):
         # cid?
-        context = self.w2ui_grid_init()
+        context = self.w2ui_init()
         context['form'] =  self.search_form
 
         # for dbg purposes
@@ -590,7 +607,7 @@ class GrandRegister( object ):
         return rows
 
     def w2ui_grid_records(self):
-        self.w2ui_grid_init()
+        self.w2ui_init()
 
         # in real usecase - we want to RENDER first
         def rows_rendered_flattened(rows, fk_fields_leave_int=True):

@@ -706,7 +706,7 @@ def test_63e_granderp_good_goods():
 
                              # filters=filters  # fast filters
                              # ,
-                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+                             , dalview_translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
 
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
 
