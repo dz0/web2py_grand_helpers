@@ -83,49 +83,144 @@ class GrandRegister( object ):
        filter: query, having
        records_w2ui
 
+    Explanation:
+    Workflow:
+       Search ->  Grid -> CRUD (CUD)
+
     """
     def __init__(self,
-                 columns,
+                 # columns=None,
+                 grid_columns=None,
                  recid=None,
-                 left_join_chains = None,  # probably would be enough
-                 search_fields = None,
-                 search_fields_update_triggers = None, # TODO
+
                  response_view = "plugin_AnySQLFORM/w2ui_grid.html",
+
+                 # extra
+                 cid=None,
+
+
+                 # REFACTORed args
+                    search = None,
+                    grid = None,
+                    crud = None,
+                    dalview = None, # this is shared among search and grid: translator, join_chains, initial_query/having, groupby, etc...
+                    auth = None,
+
+                 # DALVIEW
+                    dalview_translator = None, # TODO
+                    # left_join_chains=None,  # probably would be enough (or [[]])
+                    dalview_left_join_chains = None,
+                    # table_name=None,
+                    auth_data_name=None,  # TODO auth_data_name ?
+                    dalview_table_name = None,
+
+                 # SEARCH
+                    # search_fields = None,
+                    search_fields=None,
+                    search_fields_update_triggers=None,  # TODO
+                    search_fast_filters = None,
+                    search_form_factory = None,
+                    search_use_grand_search_form = True,
+                    search_formstyle=None,
+                    search_field_decorator=SearchField,
+
+                 # GRID
+                 #    grid_columns = None,
+                    grid_recid = None,
+                    grid_columns_options = None, # dict: colname: { ..options..}
+                    grid_options_sort = None,
+                    grid_columns_force_FK_table_represent=False,
+                    grid_options_extra = {},
+
+
+                    # CRUD : actions/commands  Grid/Edit/Add/Import/...
+                    crud_url_Records = None,
+                    crud_url_Add = None,
+                    crud_url_Edit = None,
+                    crud_url_Import = None,
+
+                 # end REFACTORed args
 
                  **kwargs  # form_factory
                  ):
 
         request = current.request
 
+        self.args = Storage() # for systematically storing args for: search, grid, cud contexts
+
+        def get_arg( ctx_name, arg_name, locals_of_init=locals() ):
+            """Gets argument by object in Register: "search", "grid" or "c(r)ud"
+            and maps it to self.args.obj.attr
+            context_arg --> self.args.context.arg
+            search_fields  -->  self.args.search.fields
+            grid_columns --> self.args.grid.columns
+
+            The problem is, that (as the code changes) the <arg> can reside in:
+              - prelisted args (context_arg=..)
+              - **kwargs
+              - <context>['arg']  -- overrides other values (if present)
+              - # default of <context>['arg'] -- which is listed somewhere (probably will be in prelisted_args -- so no need to extra-check)...
+
+            Behaves a bit like singleton, as it returns the figured out value..
+            """
+
+            full_arg_name = ctx_name + "_" + arg_name
+            arg_val = None
+
+            func = GrandRegister.__init__
+            if full_arg_name in func.__code__.co_varnames[:func.func_code.co_argcount]:
+                # print 'dbg locals', locals_of_init
+                arg_val = locals_of_init[ full_arg_name ]
+            elif full_arg_name in kwargs:
+                arg_val = kwargs[full_arg_name] # TODO: maybe .pop()?
+            elif arg_name in kwargs:
+                arg_val = kwargs[arg_name]  # TODO: maybe .pop()?
+                raise RuntimeError("Parameter %s=%r in kwargs (not in context args)"% (arg_name, arg_val))  # todo: later - warning would be enough
+
+            self.args[ctx_name] = ctx_kwargs  =   locals_of_init[ctx_name] or self.args[ctx_name] or Storage()  # get from param or attr or new
+
+            ctx_kwargs.setdefault( arg_name, arg_val) # if not given, set it
+
+            return ctx_kwargs[arg_name]
+
+        def prepare_context(ctx_name):
+            func = GrandRegister.__init__
+            arg_names_in_def = func.__code__.co_varnames[:func.func_code.co_argcount]
+            for arg_name in     list(arg_names_in_def) + kwargs.keys():
+                if arg_name .startswith(ctx_name+"_"):
+                    arg_name_4ctx = arg_name[len(ctx_name)+1:]  # strip context name from it
+                    get_arg(ctx_name, arg_name_4ctx)
+
+
+
+            return self.args[ctx_name]
+
+        # search = copy.copy(search)  # todo: maybe make shallow copy  -- not to pollute it outside of func...
+        def __init__NG():
+            for ctx in 'search grid crud dalview auth'.split():
+                # self.args[ctx] = self.args[ctx] or Storage()
+                prepare_context(ctx)
+
+            self.args.dalview.translator = kwargs.get('translator') or get_arg('dalview', 'translator')
+
+
+        __init__NG()
+
         def init_w2ui_kwargs():
             # for w2ui_grid response_view
             self.w2ui_kwargs = Storage()
-            self.w2ui_kwargs.cid           = self.cid           =  kwargs.pop('cid', request.function )
+            self.w2ui_kwargs.cid           = self.cid           =  cid or request.function
             self.w2ui_kwargs.grid_function = self.grid_function =  kwargs.pop('grid_function', request.function)
             self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  kwargs.pop('w2ui_sort', None)
             self.w2ui_kwargs.w2grid_options_extra_toolbar_extra =  kwargs.pop('w2grid_options_extra_toolbar_extra', None)
 
-            self.w2ui_kwargs.table_name    = self.table_name    =  kwargs.pop('table_name',  columns[0].tablename)
-            self.w2ui_kwargs.data_name     = self.data_name     =  kwargs.pop('data_name',  self.table_name) or request.controller
+            # self.w2ui_kwargs.table_name    = self.table_name    =  table_name or  columns[0].tablename
+            self.args.dalview.table_name = self.w2ui_kwargs.table_name    = self.table_name    =  dalview_table_name or kwargs.get('table_name') or  columns[0].tablename
+            self.args.auth.data_name = self.w2ui_kwargs.data_name     = self.data_name     =  auth_data_name  or kwargs.get('data_name') or  self.table_name or request.controller
             # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
 
             self.w2ui_kwargs.w2grid_options_extra  =  kwargs.pop('w2grid_options_extra', {} )
         init_w2ui_kwargs()
-
-        def init_recid():
-            db = current.db
-            # record id field (or expression?)
-            self.recid = recid
-            if not self.recid:
-                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
-                for col in columns:
-                    if hasattr(col, 'tablename'):
-                        main_table = db[ col.tablename ]
-                        self.recid = main_table._id
-                        print "DBG, recid", self.recid
-                        break
-        init_recid()
-
 
 
         def init_crud_actions():
@@ -133,7 +228,6 @@ class GrandRegister( object ):
             crud_controller = kwargs.pop('crud_controller', 'external')
 
             if crud_controller in ['postback', None]:
-
                 self.crud_urls.setdefault('add', URL(args=['add']))
                 self.crud_urls.setdefault('edit', URL(args=['edit', '___id___'],
                                                       vars={'view_extension': 'html'}))  # todo: use signature?
@@ -147,46 +241,72 @@ class GrandRegister( object ):
 
         init_crud_actions()
 
+
+
         # ordinary params
 
-        self.columns  = columns
-        self.force_FK_table_represent = kwargs.pop('force_FK_table_represent', False)
-        if self.force_FK_table_represent:
-            for nr, col in enumerate( columns ):
-                if is_reference( col ):
-                    columns[nr] = represent_FK( col )
+        self.response_view = response_view
 
-        self.left_join_chains = left_join_chains  # probably would be enough
-        self.search_fields = search_fields
+        self.columns = get_arg('grid', 'columns') or kwargs.get('columns')
+
+        def init_recid():
+            db = current.db
+            # record id field (or expression?)
+            self.recid = grid_recid or kwargs.get('recid')
+            if not self.recid:
+                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
+                for col in self.columns:
+                    if hasattr(col, 'tablename'):
+                        main_table = db[ col.tablename ]
+                        self.recid = main_table._id
+                        print "DBG, recid", self.recid
+                        break
+        init_recid()
+
+        self.force_FK_table_represent = kwargs.get('force_FK_table_represent') or get_arg('grid', 'columns_force_FK_table_represent')
+        if self.force_FK_table_represent:
+            for nr, col in enumerate( self.columns ):
+                if is_reference( col ):
+                    self.columns[nr] = represent_FK( col )
+
+
+
+        self.left_join_chains = dalview_left_join_chains or kwargs.get('left_join_chains') # probably would be enough
+
         # self.search_fields.append( SearchField('grid') )
 
         self.search_fields_update_triggers = search_fields_update_triggers
 
-        self.response_view = response_view
+        self.search_fields = get_arg('search', 'fields') or search_fields
+        self.args.search.pop('fields', None)  # # in form_factory they need to be separated form kwargs
 
-        self.fast_filters = kwargs.get('filters') # actually they are addressed to grand_search_form
+        self.fast_filters = get_arg('search', 'fast_filters') or kwargs.get('filters') # actually they are addressed to grand_search_form
 
-        self.kwargs = kwargs
+        self.kwargs = kwargs # TODO: dispach to contexts: search | grid | crud
 
-        self.use_grand_search_form = kwargs.get('use_grand_search_form', True)
+
+        # CREATE SEARCH FORM
+
+        self.use_grand_search_form = get_arg('search', 'use_grand_search_form')
+        # print 'dbg use_grand_search_form', self.use_grand_search_form
         if self.use_grand_search_form:
             # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
             def my_grand_search_form(*fields, **kwargs):
                 from searching import search_form as grand_search_form
                 return grand_search_form(self.cid, *fields, **kwargs)
 
-            kwargs.setdefault( 'form_factory', my_grand_search_form )
+            # kwargs.setdefault( 'form_factory', my_grand_search_form )
+            self.args.search.form_factory = my_grand_search_form
 
         # a bit smarter way -- in case   kwargs['form_factory'] is None
         # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
         # kwargs['form_factory'] = self.form_factory
 
-        # self.search_form = QuerySQLFORM( *self.search_fields, **kwargs )
-        self.search_form = GrandSQLFORM( *self.search_fields, **kwargs )
-        self.search_fields = self.search_form.formfields  # UPDATES items to SearchField instances
 
-        # self.left_join_chains = self.join_chains or [[]]
-
+        # self.search_form = GrandSQLFORM( *self.search_fields, **kwargs ) # Deprecate
+        # print 'dbg self.args.search', self.args.search
+        self.search_form = GrandSQLFORM( *self.search_fields, **self.args.search )
+        # self.search_fields = self.search_form.formfields_flat  # UPDATES items to flattened SearchField instances
 
         # self.search_fields_update_triggers                    # TODO: for ReactiveForm
 
@@ -271,7 +391,7 @@ class GrandRegister( object ):
 
             ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
                 URL(vars=dict(_grid=True, _grid_dbg=True), extension=None),
-                [f.name for f in self.search_fields]
+                [f.name for f in self.search_form.formfields_flat]
             )
 
             ajax_link = A('ajax load records', _href=ajax_url, _id="ajax_loader_link")
@@ -559,6 +679,7 @@ class GrandSQLFORM(QuerySQLFORM):
 
         kwargs.setdefault('table_name', 'GrandSQLFORM')
         QuerySQLFORM.__init__(self, *fields, **kwargs)
+        pass
 
 
 

@@ -272,6 +272,29 @@ def test_32_grandtranslator_dalview_search():
 #####################    GRAND REGISTER        ###########################
 #####################                      ###########################
 #################################################################################
+def test_40_GrandForm():
+    fields = test_fields()
+
+    fields[0].comparison = 'equal'
+    a, b, c, d = fields[:4]
+    fields = [ [a, b], [c, d] ]  # prepare for solidform
+
+    def my_grand_search_form(*fields, **kwargs):
+        from searching import search_form as grand_search_form
+        return grand_search_form('test', *fields, **kwargs)
+
+    # kwargs.setdefault( 'form_factory', my_grand_search_form )
+    form_factory = my_grand_search_form
+
+    form = GrandSQLFORM(*fields,
+                        form_factory=form_factory
+                        , formstyle =  None #'table3cols' or 'divs' # if not defined -- 'table2cols'
+                        )
+
+    data = form.vars_as_Row()
+
+    return dict(form=form)
+    return form
 
 def test_41_grandregister_form_and_ajax_records(  ):
     search_fields = test_fields()
@@ -279,13 +302,13 @@ def test_41_grandregister_form_and_ajax_records(  ):
 
     register = GrandRegister(cols,
                              cid = 'w2ui_test', # w2ui
-                             data_name = 'test grand',
-                             table_name = 'test_grand',
+                             auth_data_name = 'test grand',
+                             dalview_table_name = 'test_grand',
                              search_fields = search_fields ,
-                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             dalview_left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              # , response_view = None
-                             , translator = gt
-                             , use_grand_search_form = False
+                             , dalview_translator = gt
+                             , search_use_grand_search_form = False
                              )
 
     # response.view = ...
@@ -366,27 +389,30 @@ def test_47_grandregister():
         a, b, c, d =  search_fields
         search_fields_structured = [   [a, b],    [c, d]    ]
 
-        kwargs = dict( search_fields=search_fields_structured  #,  filters=fast_filters
+        search_kwargs = dict( search_fields=search_fields_structured  #,  filters=fast_filters
                        #, response_view = "" # "plugin_AnySQLFORM/w2ui_grid.html"
                      )
     else:
-        kwargs = dict( search_fields=search_fields,   use_grand_search_form=False        )
+        # kwargs = dict( search_fields=search_fields,   use_grand_search_form=False        )
+        search_kwargs = dict( search_fields=search_fields,   search_use_grand_search_form=False        )
 
 
     register = GrandRegister(cols,
                              cid='w2ui_test', # w2ui
                              table_name = 'test_grand',
 
-                             left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             # left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                             dalview_left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              # , response_view = None
-                             , translator=gt
+                             # , translator=gt
+                             , dalview_translator=gt
 
-                              # search_fields=search_fields, use_grand_search_form=use_grand_search_form,
-                              # search_fields=search_fields,  use_grand_search_form=False  # default tries SOLIDFORM
-                              # search_fields = search_fields_structured,  # for SOLIDFORM         # search_fields = [ search_fields ],
-                             , filters = fast_filters
-                             , formstyle =  None  or 'table3cols' # divs table2cols table3cols
-                             , **kwargs  # SEARCH FIELDS, etc
+                             # , filters = fast_filters
+                             , search_fast_filters = fast_filters
+                             # , formstyle =  None  or 'table3cols' # divs table2cols table3cols
+                             # , search_formstyle =  None  or 'table2ols' # divs table2cols table3cols
+                             , **search_kwargs  # SEARCH FIELDS, etc
+                             # , **kwargs  # SEARCH FIELDS, etc
                              )
     return register.render()
 
@@ -394,7 +420,7 @@ test_grandregister = test_47_grandregister
 def test_42_grandregister_with_just_SQLFORM():
     global use_grand_search_form
     use_grand_search_form = False
-    test_grandregister()
+    return test_grandregister()
 
 
 

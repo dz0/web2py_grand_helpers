@@ -266,10 +266,10 @@ class AnySQLFORM( object  ):
         ####### prepair fields #############
 
         field_decorator = kwargs.pop('field_decorator', FormField)
-
-        self.formfields = []
-        self.structured_fields = traverse_fields( fields, self.formfields, field_decorator  )
-        # self.formfields = [f if isinstance(f, FormField) else FormField(f) for f in fields ]
+        fields = fields or kwargs.pop('fields', [])
+        self.formfields_flat = []
+        self.structured_fields = traverse_fields(fields, self.formfields_flat, field_decorator)
+        # self.formfields_flat = [f if isinstance(f, FormField) else FormField(f) for f in fields ]
 
         # assertions
         try:
@@ -278,11 +278,11 @@ class AnySQLFORM( object  ):
             raise RuntimeError("Form fields shouldn't have same names. \n %s" % e)
 
         # self.default_IS_IN_DB = kwargs.pop('default_IS_IN_DB', None)
-        for f in self.formfields:
+        for f in self.formfields_flat:
             self.set_default_validator(f)
 
         ######### generate form #############
-
+        print "dbg AnySQLFORM kwargs", kwargs
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
         form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
@@ -343,7 +343,7 @@ class AnySQLFORM( object  ):
                     ):
                     return False
             return True
-        return [f    for f in self.formfields     if match_kwargs(f)]
+        return [f for f in self.formfields_flat if match_kwargs(f)]
 
 
     def get_field(self, arg=None, **kwargs ):
@@ -362,7 +362,7 @@ class AnySQLFORM( object  ):
         # raise KeyError("FormField '%s' not found" % arg)
 
     def check_duplicate_fields_by_attrs(self, *attr_names):
-        for f in self.formfields:
+        for f in self.formfields_flat:
             attrs = {  aname: getattr(f, aname)  for aname in attr_names  }
             fields = self.find_fields( **attrs )
             if len(fields) > 1:
@@ -395,7 +395,7 @@ class AnySQLFORM( object  ):
         # if vars is None:
             # vars = current.request.vars
 
-        for f in self.formfields:
+        for f in self.formfields_flat:
             # if f.name in vars:  # this would cause some of stuff missing..
                 # value = vars[f.name]
                 value = self.get_value( f , vars=vars)
@@ -612,9 +612,10 @@ class QuerySQLFORM (AnySQLFORM ):
         """
         # table_name = kwargs.pop('table_name', 'QuerySQLFORM'),
         kwargs.setdefault('table_name', 'QuerySQLFORM')
-        AnySQLFORM.__init__(self, *fields, field_decorator=SearchField,  **kwargs)
+        kwargs.setdefault('field_decorator', SearchField)
+        AnySQLFORM.__init__(self, *fields,  **kwargs)
         # super(QuerySQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
-        # self.formfields = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
+        # self.formfields_flat = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
         # assertions
         try:
             self.check_duplicate_fields_by_attrs('target_expression', 'comparison')
@@ -667,7 +668,7 @@ class QuerySQLFORM (AnySQLFORM ):
         queries = []
         queries_4aggregates = []
         # for filter in flattened_filters:
-        for f in self.formfields:
+        for f in self.formfields_flat:
             input_value =  self.get_value( f )  # gets the input value
 #             print "DBG ", f
             # if 'some' in f.name:
@@ -722,7 +723,7 @@ class QuerySQLFORM (AnySQLFORM ):
 
 def get_expressions_from_formfields( formfields, include_orphans=False ):
     # result = []
-    # for f in formfields:
+    # for f in formfields_flat:
     #     if isinstance(f, FormField):
     #         result.append( f.target_expression )
     #     else:
