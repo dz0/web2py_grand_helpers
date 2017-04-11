@@ -282,7 +282,7 @@ class AnySQLFORM( object  ):
             self.set_default_validator(f)
 
         ######### generate form #############
-        print "dbg AnySQLFORM kwargs", kwargs
+        # print "dbg AnySQLFORM kwargs", kwargs
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
         form_factory= kwargs.pop('form_factory', SQLFORM.factory)
         self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)

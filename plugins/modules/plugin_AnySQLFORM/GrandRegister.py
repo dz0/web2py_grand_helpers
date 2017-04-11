@@ -216,29 +216,42 @@ class GrandRegister( object ):
         # COLUMNS stuff
         self.columns = get_arg('grid', 'columns') or kwargs.get('columns')
 
-        def init_table_name_and_recid():
-            db = current.db
+        if self.columns and not self.args.grid.w2ui_coldata_oldschool_js:
+            def init_table_name_and_recid():
 
-            main_table = None
-            for col in self.columns:
-                if hasattr(col, 'tablename'):
-                    main_table = col.tablename
-                    break
+                # if not self.columns:     return
 
-            self.table_name = self.args.dalview.table_name = get_arg('dalview', 'table_name') or main_table
+                db = current.db
 
-            # record id field (or expression?)
-            self.recid = get_arg('grid', 'recid')
-            if not self.recid:
-                main_table = get_arg('dalview', 'table_name')
-                self.recid = db[main_table]._id
-                print "DBG, recid", self.recid
-                # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
-            else:
-                if self.recid.tablename != self.table_name:
-                    raise RuntimeError("recid   doesn't match  table_name:  %r   %r" % (self.recid, self.table_name) )
+                def find_main_table():
 
-        init_table_name_and_recid()
+                    for col in self.columns:
+                        if hasattr(col, 'tablename'):
+                            return col.tablename
+
+
+
+                self.table_name = self.args.dalview.table_name = get_arg('dalview', 'table_name') or find_main_table()
+
+                # record id field (or expression?)
+                self.recid = get_arg('grid', 'recid')
+                if not self.recid:
+                    main_table = get_arg('dalview', 'table_name')
+                    self.recid = db[ main_table  ]._id
+                    print "DBG, recid", self.recid
+                    # self.recid = recid or columns[0].table._id # will be passed in w2ui grid to Edit/Delete
+                else:
+                    if self.recid.tablename != self.table_name:
+                        raise RuntimeError("recid   doesn't match  table_name:  %r   %r" % (self.recid, self.table_name) )
+
+            init_table_name_and_recid()
+
+            self.force_FK_table_represent = kwargs.get('force_FK_table_represent') or get_arg('grid', 'columns_force_FK_table_represent')
+            if self.force_FK_table_represent:
+                for nr, col in enumerate( self.columns ):
+                    if is_reference( col ):
+                        self.columns[nr] = represent_FK( col )
+
 
         def init_w2ui_kwargs():
             # for w2ui_grid response_view
@@ -248,7 +261,7 @@ class GrandRegister( object ):
             self.w2ui_kwargs.w2ui_sort = self.w2ui_sort =  get_arg('grid', 'w2ui_sort')
 
             # self.w2ui_kwargs.table_name    = self.table_name    =  table_name or  columns[0].tablename
-            self.args.dalview.table_name = self.w2ui_kwargs.table_name    = self.table_name
+            self.w2ui_kwargs.table_name    =  self.table_name = self.args.dalview.table_name
             self.w2ui_kwargs.data_name     = self.data_name     =  get_arg('grid', 'data_name') or  self.table_name or request.controller
             # self.w2ui_kwargs.context_name  = self.context_name  =  kwargs.pop('context_name', self.data_name) # maybe unnecessary
 
@@ -284,11 +297,6 @@ class GrandRegister( object ):
 
         self.response_view = response_view
 
-        self.force_FK_table_represent = kwargs.get('force_FK_table_represent') or get_arg('grid', 'columns_force_FK_table_represent')
-        if self.force_FK_table_represent:
-            for nr, col in enumerate( self.columns ):
-                if is_reference( col ):
-                    self.columns[nr] = represent_FK( col )
 
 
 
@@ -312,9 +320,10 @@ class GrandRegister( object ):
         # response.subtitle = "test  w2ui_grid"
         # response.menu = response.menu or []
 
-        self.columns.append( TOTAL_ROWS )
 
         if not self.args.grid.w2ui_coldata_oldschool_js : # backwards compatibility (while migrating) one can use oldschool defs taken from  templates (can be rendered with  gluon.template.render(content='...', context=<vars>)
+
+            self.columns.append(TOTAL_ROWS)
 
             self.w2ui_columns = []
             for f in self.columns:
@@ -357,7 +366,7 @@ class GrandRegister( object ):
                 sorter.setdefault('direction', "asc")
 
             self.args.grid.w2ui_columns = self.w2ui_columns[:-1]  # remove TOTAL_ROWS from end...
-            print 'dbg self.args.grid.w2ui_columns', self.args.grid.w2ui_columns
+            # print 'dbg self.args.grid.w2ui_columns', self.args.grid.w2ui_columns
         # self.w2ui_kwargs['w2grid_options_extra']= dict(autoLoad=False ) # dbg
 
 
@@ -378,7 +387,7 @@ class GrandRegister( object ):
         context.update(self.w2ui_kwargs)
 
         update_dict_override_empty( context, self.args.grid )  # context.update(self.args.grid)
-        print 'dbg context', context
+        # print 'dbg context', context
 
         return context
 

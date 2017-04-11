@@ -628,6 +628,61 @@ def test_63d_granderp_good_goods_representFK():
 
 
 
+def test_63z_granderp_good_goods_oldschool_cols():
+    from gluon.template import render
+    global URL
+    content="""
+            url: "{{ =URL('good', '{0}_grid.json'.format(cid), user_signature=True) }}",
+            columns: [
+                {field: "category", caption: "{{ =db.good.category_id.label }}", size: "100%", sortable: true,
+                 resizable: true},
+                {field: "group", caption: "{{ =db.good.group_id.label }}", size: "100%", sortable: true,
+                 resizable: true},
+                {field: "sku", caption: "{{ =db.good.sku.label }}", size: "100%", sortable: true, resizable: true},
+                {field: "title", caption: "{{ =db.good.title.label }}", size: "100%", sortable: true, resizable: true},
+                {field: "measurement", caption: "{{ =db.good.measurement_id.label }}", size: "100%", sortable: true,
+                 resizable: true},
+                {field: "cost", caption: "{{ =db.good.cost.label }}", size: "100%", sortable: true, resizable: true,
+                 render: 'number:2'}
+            ],
+            sortData: [
+                {field: "sku", direction: "asc"}
+            ], """
+
+    db = current.db
+    cid = "goods"
+    print 'dbg locals()', locals()
+    context = locals()
+    context['URL']=URL
+    w2ui_coldata_oldschool_js = render(content=content, context=context )
+
+    register = GrandRegister(None,
+
+                             force_FK_table_represent=True,
+                             cid=cid,
+                             table_name='good',
+                             search_fields=[[
+                                 SearchField( db.good.title, name='title', name_extension='', prepend_tablename=False, )
+                             ]],
+                             grid_w2ui_coldata_oldschool_js = w2ui_coldata_oldschool_js
+
+                             # w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+
+                             # filters=filters  # fast filters
+                             # ,
+                             , dalview_translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+
+                             , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
+                             , grid_function='goods_grid'
+                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             # _class = 'mobile_sqlform' if IS_MOBILE else None,
+
+                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             )
+    result = register.render()
+    # save_DAL_log()
+    return result
+
 
 def test_63e_granderp_good_goods():
 
