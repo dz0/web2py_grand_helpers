@@ -1,6 +1,26 @@
 # -*- coding: utf-8 -*-
 
 from gluon import current
+import copy
+
+def joined_dicts(d1, d2):
+
+    overlaping_keys = set(d1.keys()) & set(d2.keys())
+    if overlaping_keys:
+        raise RuntimeError("joined_dicts got overlaping_keys: %r" % overlaping_keys)
+
+    result = copy.copy(d1)
+    for key, val in d2.items():
+        if not key in d1:
+            result[key] = val
+    return result
+
+def update_dict_override_empty(d1, d2):
+    for key, val in d2.items():
+        if key in d1 and d1[key]: # if already has some important value
+            continue
+        d1[key] = val
+    return d1
 
 def get_fields_from_table_format(format_str):
     """

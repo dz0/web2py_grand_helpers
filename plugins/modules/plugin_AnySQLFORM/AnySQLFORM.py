@@ -134,7 +134,7 @@ class FormField( Field ):
 
 
 
-        new_name = self.construct_new_name( field, kwargs ) 
+        new_name = self.construct_new_name( field, **kwargs )
         Field.__init__(self, fieldname=new_name, **field_attrs)
 
 
@@ -190,8 +190,8 @@ class FormField( Field ):
                 self._table = self.table = db[self.tablename] # maybe unnecessary
 
 
-    
-    def construct_new_name(self, field, kwargs ):
+    @staticmethod
+    def construct_new_name( field, **kwargs ):
         """ also defaults self and field .tablename  to  "no_table" if not present """
         
         
@@ -200,8 +200,8 @@ class FormField( Field ):
         else:
 
             if isinstance(field, FormField):  # we already constructed the name earlier
-                self.name = new_name = field.name  
-                return self.name
+                # if self: self.name = new_name = field.name
+                return field.name
                 """
                 #if hasattr(field, '__initial_name'):
                 if type(field.target_expression) == Field:
@@ -217,8 +217,8 @@ class FormField( Field ):
                     new_name = field.name  # this is absent in Expression
                 else:
                     new_name = str(field)
-                    for char in '.()_,|&%\'\\:"= ':
-                        new_name = new_name.replace(char, '_')
+                    for char in '.(),|&%"\'\\:= +-*/><':
+                        new_name = new_name.replace(char, '_') # todo: maybe replace operators with their abbreviations
 
         if type(field) == Field:   #  isinstance would be bug
             # if not hasattr(field, 'tablename'):
@@ -228,7 +228,7 @@ class FormField( Field ):
         
         
         #self.__initial_name = getattr(field, 'name', None)
-        self.name = new_name
+        # if self: self.name = new_name
         return new_name
          
     def get_query(self, val):
@@ -431,7 +431,7 @@ search_options = {
 """
 class SearchField( FormField ):
     """New properties: comparison
-    New methods: get_query, overrides  construct_new_name
+    New methods: get_query, update_naming
     """
                          
     def __init__(self, field, **kwargs):
@@ -444,7 +444,7 @@ class SearchField( FormField ):
            target_is_aggregate
         """
         
-        FormField.__init__(self, field, **kwargs )  # overrides "construct_new_name" and inits 'comparison', 'name_extension'
+        FormField.__init__(self, field, **kwargs )  # inits 'comparison', 'name_extension', uses them in update_naming
         # print "dbg SearchField.multiple", self.multiple
         # self.query_function = kwargs.pop('query_function', None)  # should be get from super __init__
 
