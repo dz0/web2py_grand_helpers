@@ -4,7 +4,7 @@ from pydal.objects import Field #, Row, Expression
 
 from plugin_AnySQLFORM.AnySQLFORM import AnySQLFORM, FormField, get_expressions_from_formfields
 from plugin_AnySQLFORM.AnySQLFORM import QuerySQLFORM, SearchField
-from plugin_AnySQLFORM.GrandRegister import GrandRegister, grand_select
+from plugin_AnySQLFORM.GrandRegister import GrandRegister, select_with_virtuals as grand_select
 from plugin_AnySQLFORM.GrandRegister import GrandTranslator, T_IS_IN_DB, GrandSQLFORM
 from plugin_AnySQLFORM.DalView import DalView
 
@@ -283,11 +283,10 @@ def test_40_GrandForm():
         from searching import search_form as grand_search_form
         return grand_search_form('test', *fields, **kwargs)
 
-    # kwargs.setdefault( 'form_factory', my_grand_search_form )
-    form_factory = my_grand_search_form
 
-    form = GrandSQLFORM(*fields,
-                        form_factory=form_factory
+    form = GrandSQLFORM(*fields
+
+                       , form_factory=my_grand_search_form
                         , formstyle =  None #'table3cols' or 'divs' # if not defined -- 'table2cols'
                         )
 
@@ -296,7 +295,7 @@ def test_40_GrandForm():
     return dict(form=form)
     return form
 
-def test_41_grandregister_form_and_ajax_records(  ):
+def test_41_grandregister_form_and_ajax_records_ERROR_possibly_permanent_loop(  ): # FIXME
     search_fields = test_fields()
     cols = get_expressions_from_formfields(search_fields )
 
@@ -313,7 +312,7 @@ def test_41_grandregister_form_and_ajax_records(  ):
 
     # response.view = ...
     if request.vars._grid:
-        rows = register.w2ui_grid_records()
+        rows = register.grid_get_records()
 
         # return BEAUTIFY(  [ filter, rows ]  )  # for testing
 
@@ -334,18 +333,18 @@ def test_41_grandregister_form_and_ajax_records(  ):
     else:
         # response.view = "plugin_w2ui_grid/w2ui_grid.html"
         # register.search_form.      add_button( 'grid', URL(vars=dict(grid=True)))
-
-        result = register.form()
+        register.search_form_init()
+        result = register.search_form
 
         # for debug purposes:
         # tablename = register.search_form.table._tablename
         ajax_url = "javascript:ajax('%s', %s, 'grid_records'); " % (
                                                 URL(vars=dict(_grid=True, _grid_dbg=True), extension=None)  ,
-                                                [f.name for f in register.search_fields]
+                                                [f.name for f in register.vars.search.fields]
                    )
 
         ajax_link = A('ajax load records', _href=ajax_url, _id="ajax_loader_link")
-        ajax_result_target = DIV( BEAUTIFY(register.w2ui_grid_records() ), _id='grid_records')
+        ajax_result_target = DIV(BEAUTIFY(register.grid_get_records()), _id='grid_records')
         # register.search_form.      add_button( 'ajax load records', ajax_url )
         # result['ajax_records']=
         # result['ats']=ajax_result_target
@@ -399,7 +398,7 @@ def test_47_grandregister():
 
     register = GrandRegister(cols,
                              cid='w2ui_test', # w2ui
-                             table_name = 'test_grand',
+                             # dalview_maintable_name = 'test_grand',
 
                              # left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              dalview_left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
@@ -417,7 +416,7 @@ def test_47_grandregister():
     return register.render()
 
 test_grandregister = test_47_grandregister
-def test_42_grandregister_with_just_SQLFORM():
+def test_42_grandregister_with_just_SQLFORM__PROBLEM(): #FixMe: ajax response "None":/
     global use_grand_search_form
     use_grand_search_form = False
     return test_grandregister()
@@ -437,7 +436,10 @@ def test_60_subjects_country_joins_chain():
 from plugin_AnySQLFORM.DalView import represent_PK, represent_FK, select_with_virtuals, virtual_aggregated_field
 from plugin_AnySQLFORM.helpers import save_DAL_log
 
-def test_60_grand_select_subjects():
+def test_60_granderp_select_subjects_TODO():
+    pass
+
+def test_60_granderp_Register_with_common_filters_TODO():
     pass
 
 
@@ -497,13 +499,13 @@ def test_62_granderp_subjects():
 
         register = GrandRegister(cols,
                                  cid=cid,
-                                 table_name='subject_subject',
+                                 dalview_maintable_name='subject_subject',
 
-                                 left_join_chains=[
+                                 dalview_left_join_chains=[
                                      [db.subject_subject, db.subject_address, db.address_address, db.address_country]
                                  ],
                                  search_fields = search_fields,
-                                 filters=filters # fast filters
+                                 search_fast_filters=filters # fast filters
                                  # translator=gt
 
                                  # , crud_urls = {'add': URL('subject', 'add_subject'),
@@ -513,7 +515,7 @@ def test_62_granderp_subjects():
 
                                  , crud_controller =  'subject' # or None for postback with default SQLFORM() behaviour
 
-                                ,formstyle =  None #'divs' if IS_MOBILE else None,
+                                ,search_formstyle =  None #'divs' if IS_MOBILE else None,
                                 # _class = 'mobile_sqlform' if IS_MOBILE else None,
                                  )
         return register.render()
@@ -612,17 +614,17 @@ def test_63d_granderp_good_goods_representFK():
     ]
 
     register = GrandRegister(cols,
-                             force_FK_table_represent=True,
+                             grid_force_FK_table_represent=True,
                              cid=cid,
-                             table_name='good',
+                             dalview_maintable_name='good',
                              search_fields=search_fields,
 
                              # force_FK_table_represent = False, # default True
 
-                             w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
-                             , translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
+                             grid_w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+                             , dalview_translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
-                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              )
     return register.render()
 
@@ -658,9 +660,9 @@ def test_63z_granderp_good_goods_oldschool_cols():
 
     register = GrandRegister(None,
 
-                             force_FK_table_represent=True,
+                             grid_force_FK_table_represent=True,
                              cid=cid,
-                             table_name='good',
+                             dalview_maintable_name='good',
                              search_fields=[[
                                  SearchField( db.good.title, name='title', name_extension='', prepend_tablename=False, )
                              ]],
@@ -674,7 +676,7 @@ def test_63z_granderp_good_goods_oldschool_cols():
 
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
                              , grid_function='goods_grid'
-                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
                              # ,w2grid_options_extra_toolbar_extra = "BLA"
@@ -733,7 +735,7 @@ def test_63e_granderp_good_goods():
 
         # hidden={'goods_autocomplete_title': URL('good', 'autocomplete_good_titles.json'),
         #         'goods_autocomplete_sku': URL('good', 'autocomplete_good_skus.json')},
-        # table_name='good'
+        # dalview_maintable_name='good'
 
     # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
     cols=[
@@ -752,12 +754,12 @@ def test_63e_granderp_good_goods():
 
     register = GrandRegister(cols,
 
-                             force_FK_table_represent=True,
+                             grid_force_FK_table_represent=True,
                              cid=cid,
-                             table_name='good',
+                             dalview_maintable_name='good',
                              search_fields=search_fields,
 
-                             w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+                             grid_w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
 
                              # filters=filters  # fast filters
                              # ,
@@ -765,7 +767,7 @@ def test_63e_granderp_good_goods():
 
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
 
-                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
                              # ,w2grid_options_extra_toolbar_extra = "BLA"
@@ -876,7 +878,7 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
 
         *search_fields,
         cid=cid,
-        table_name='batches'
+        dalview_maintable_name='batches'
     )
 
     return  form
@@ -917,13 +919,11 @@ def test_66b_aggregate_warehouse_batches_Grid():
 
     total_field_vagg = virtual_aggregated_field( 'total_field_vagg',
         # query=query,
-        # query = db.warehouse_batch.good_id==271,
         groupby=db.warehouse_batch.good_id,  # expression used to group stuff (also will be column in select)
         # required_expressions=[db.warehouse_batch.ALL],  # cols in select
         required_expressions=[db.warehouse_batch.price, db.warehouse_batch.residual, db.warehouse_batch.currency_id, db.warehouse_batch.rate_date  ],  # cols in select
         f_agg = lambda r, group:  sum(group) or D('0.00000')  ,  # aggregation lambda
-        # f_agg = lambda r, group:  'bla',  # aggregation lambda
-        # f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
+
         f_group_item = lambda d: convert(db, d.price * d.residual, precision=5, source_currency_id=d.currency_id, rate_date=d.rate_date),  # function applied to group item/row -- like f for ordinary Field.Virtual
         table_name = 'warehouse_batch'
         #, translator = None
@@ -977,13 +977,15 @@ def test_66c_aggregate_warehouse_batches_Register():
 
     register = GrandRegister(cols,
 
-                             force_FK_table_represent=True,
+                             grid_force_FK_table_represent=True,
                              cid='batches',
-                             table_name='batches',
+                             # dalview_maintable_name='batches',
+                             # dalview_maintable_name='warehouse_batch',
+                             grid_data_name='batches',
                              search_fields=search_fields
 
                              #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
-                             , left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
+                             , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
 
                              # filters=filters  # fast filters
                              # ,
@@ -991,7 +993,7 @@ def test_66c_aggregate_warehouse_batches_Register():
 
                              , crud_controller='warehouse'  # or None for postback with default SQLFORM() behaviour
 
-                             , formstyle=None  # 'divs' if IS_MOBILE else None,
+                             , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
                              # ,w2grid_options_extra_toolbar_extra = "BLA"
@@ -1022,7 +1024,7 @@ def test_00_dev_auth_has_permission():
 def test_01_virtual_field():
     db.define_table('demo',
                     Field('name')
-                    , Field.Virtual('virtual', f=lambda r: 'v...'+r.demo.name, table_name='demo')
+                    , Field.Virtual('virtual', f=lambda r: 'v...'+r.demo.name, dalview_maintable_name='demo')
                     , Field('bla', default="bla")
                     )
     db.demo.truncate()

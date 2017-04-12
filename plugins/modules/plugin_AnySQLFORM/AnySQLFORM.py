@@ -284,8 +284,8 @@ class AnySQLFORM( object  ):
         ######### generate form #############
         # print "dbg AnySQLFORM kwargs", kwargs
         # factory could be SQLFORM.factory or SOLIDFORM.factory or so..
-        form_factory= kwargs.pop('form_factory', SQLFORM.factory)
-        self.table_name  = kwargs.pop('table_name',  DEFAULT_TABLE_NAME)
+        form_factory= kwargs.pop('form_factory', None) or SQLFORM.factory
+        self.table_name  = kwargs.pop('table_name',  None) or DEFAULT_TABLE_NAME
 
         kwargs.setdefault('formstyle', 'table2cols')
 

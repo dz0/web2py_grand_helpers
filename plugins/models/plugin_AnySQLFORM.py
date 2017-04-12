@@ -10,7 +10,11 @@ MSG_NO_PERMISSION
 MSG_RECORD_NOT_FOUND
 MSG_INVALID_ACTION"""
 for msg in MSGS.split():
-    setattr(current, msg,  globals()[msg] )
+    if getattr(current, 'DBG', None):
+        val = globals().get(msg, msg)
+    else:
+        val = globals()[msg]
+    setattr(current, msg,  val)
 
 current.auth = auth
 current.db = db

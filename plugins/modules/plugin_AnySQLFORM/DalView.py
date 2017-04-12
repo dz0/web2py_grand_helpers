@@ -538,7 +538,9 @@ def select_with_virtuals(*columns,  **kwargs):
     ####  do SELECT  -- get data rows
     ################################################################
     if joins:  # now joins always are left   TODO: make INNER possible..
-        kwargs.setdefault('left', []).extend(  joins )
+        if not kwargs.get('left'):
+            kwargs['left'] = []
+            kwargs['left'].extend(  joins )
 
     translator= kwargs.pop('translator', None)  # TODO -- USE default translator
     selection = DalView( *(selectable+nonshown), translator=translator, query=query,  **kwargs )
