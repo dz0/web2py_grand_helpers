@@ -619,7 +619,8 @@ def select_with_virtuals(*columns,  **kwargs):
 
     if log:
         db._debug = saved_debug;
-        save_DAL_log(mode='a', flush=False)
+        # save_DAL_log(mode='a', flush=False)
+        save_DAL_log()
 
     return rows
 

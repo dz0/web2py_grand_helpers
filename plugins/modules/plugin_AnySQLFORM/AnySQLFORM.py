@@ -133,9 +133,15 @@ class FormField( Field ):
         field_attrs = { key: find_out_attr(key, data_srcs)   for key in default_field_attrs }
 
 
-
-        new_name = self.construct_new_name( field, **kwargs )
+        # hack to keep original name (sometimes important)
+        self.no_rename = kwargs.pop('no_rename', False) or getattr(field, 'no_rename', False)
+        if self.no_rename:
+            new_name = field.name
+        else:
+            new_name = self.construct_new_name( field, **kwargs )
+        # new_name = self.construct_new_name(field, **kwargs)
         Field.__init__(self, fieldname=new_name, **field_attrs)
+
 
 
         if getattr(current, 'DBG', False) and type(field) is Field:
@@ -510,8 +516,13 @@ class SearchField( FormField ):
        
                
     def update_naming( self, field, kwargs ):
+
+
         new_name = self.name
         self.init_comparison_and_name_extension( field, kwargs )
+
+        if self.no_rename:
+            return  self.name
 
         if self.name_extension: # we could give      name_extension = ''  (in kwargs), so it is not appended
             new_name += '__'+self.name_extension

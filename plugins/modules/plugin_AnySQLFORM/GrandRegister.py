@@ -162,7 +162,18 @@ class GrandRegister( object ):
                         raise RuntimeError("Parameter %s=%r in kwargs (not in context ('%s_') args)"% (arg_name, arg_val, ctx_name))
                     if arg_name in list( func.__code__.co_varnames[:func.func_code.co_argcount]):
                         arg_val = locals_of_init[ arg_name ]
-                        raise RuntimeError("Parameter %s=%r in standardt params (not in context ('%s_') args)"% (arg_name, arg_val, ctx_name))
+                        raise RuntimeError("Parameter %s=%r in standart params (not in context ('%s_') args)"% (arg_name, arg_val, ctx_name))
+
+                    for other_ctx_name in  GrandRegister.contexts:
+                        if other_ctx_name != ctx_name:
+                            other_full_arg_name = other_ctx_name + "_" + arg_name
+                            if other_full_arg_name  in kwargs:
+                                arg_val = kwargs[other_full_arg_name ]
+                                raise RuntimeError("Parameter %s=%r in other context ('%s_) kwargs (not in context ('%s_') args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
+                            if other_full_arg_name  in list( func.__code__.co_varnames[:func.func_code.co_argcount]):
+                                arg_val = locals_of_init[ other_full_arg_name  ]
+                                raise RuntimeError("Parameter %s=%r in other context ('%s_) in standart params (not in context ('%s_') args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
+
 
                 # a way to track deprecated args
                 deprecated_args = 'recid'.split()
@@ -325,7 +336,9 @@ class GrandRegister( object ):
 
             if crud.data_name is None:
                 crud.data_name = self.cid or self.maintable_name
-                crud.data_name.rstrip('s')  # primitive hack
+
+                # primitive hack to make singular form
+                crud.data_name = crud.data_name.rstrip('s')
                 if crud.data_name.endswith('ie'): crud.data_name=crud.data_name[:-2]+'y' # categorie --> category
 
 

@@ -439,8 +439,6 @@ from plugin_AnySQLFORM.helpers import save_DAL_log
 def test_60_granderp_select_subjects_TODO():
     pass
 
-def test_60_granderp_Register_with_common_filters_TODO():
-    pass
 
 
 # @auth.requires_permission('list', 'subject_subject')
@@ -686,7 +684,7 @@ def test_63z_granderp_good_goods_oldschool_cols():
     return result
 
 
-def test_63e_granderp_good_goods_TODOcommon_filter():
+def test_63e_granderp_good_goods_WITH_common_filter():
 
     # gt = None
 
@@ -698,7 +696,7 @@ def test_63e_granderp_good_goods_TODOcommon_filter():
     #                         translated_set(db, auth, 'good_group', query=(db.good_group.active == True)),
     #                         multiple=True)
 
-    db.good_group._common_filter = lambda q: q & db.good_group.active == True
+    db.good_group._common_filter = lambda q:  db.good_group.active == True
 
 
     group_ids_validator=T_IS_IN_DB( gt,
@@ -761,9 +759,10 @@ def test_63e_granderp_good_goods_TODOcommon_filter():
                              columns_force_FK_table_represent=True,
                              cid=cid,
                              maintable_name='good',
+
                              search_fields=search_fields,
 
-                             grid_w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
+                             w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
 
                              # filters=filters  # fast filters
                              # ,
@@ -802,7 +801,9 @@ def test_70_AnySQLFORM_edit():
     form.process()
     return dict( form=form, vars=form.vars_as_Row() )
 
-from datetime import datetime
+import datetime
+# from helpers import  represent_datetime # action_button, expandable_section,
+
 def test_65_invoice_invoices_searchForm_datesPicking_TODO():
 
         response.subtitle = T('invoice__list_form')
@@ -813,41 +814,69 @@ def test_65_invoice_invoices_searchForm_datesPicking_TODO():
         db.invoice.type.default = None
 
 
+        # prepare date range inputs
+        use_date_period = Field('date_period', 'boolean',  label=db.invoice.date.label, default=True)
+        date_from = Field('date_from', 'date', label=T('core__from'),
+                   default=datetime.date.today() - datetime.timedelta(days=30))
+        date_untill = Field('date_until', 'date', label=T('core__until'), default=datetime.date.today())
+
+        # use_date_period = SearchField( use_date_period, name="bla", name_extension = '', prepend_tablename = False )
+        use_date_period.no_rename = True
+        date_from.comparison = '>='
+        date_from.no_rename = True
+        date_untill.comparison = '<='
+        date_untill.no_rename = True
+
+        date_period = [
+            [use_date_period],
+            [date_from,    date_untill]
+        ]
+
         search_fields = [
             [db.invoice.type],
-            [db.invoice.subject_id,
-             # Field('statuses[]', label=db.invoice.status.label, requires=IS_IN_SET(INVOICE_STATUSES, multiple=True))],
+            [db.invoice.subject_id ,
+             # Field('statuses[]', label=db.invoice.status.label, requires=IS_IN_SET(INVOICE_STATUSES, multiple=True))
              SearchField(db.invoice.status, requires=IS_IN_SET(INVOICE_STATUSES, multiple=True), override_validator=False)
              ],
             [db.invoice.number, db.invoice.financial_status],
-            # [Field('date_period', 'boolean', label=db.invoice.date.label, default=True)],
-            # [Field('date_from', 'date', label=T('core__from'),
-            #        default=datetime.date.today() - datetime.timedelta(days=30)),
-            #  Field('date_until', 'date', label=T('core__until'), default=datetime.date.today())],
 
+            # *date_period
+            # include date range inputs in form
+            [use_date_period],
+            [date_from, date_untill]
         ]
 
 
-        # form.custom.widget.date_period.parent.append(CAT(
-        #     A(T('calendar__this_week'), _href='#', _style='margin-left: 10px;',
-        #       _onclick=(
-        #           'setCurrentWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
-        #     A(T('calendar__this_month'), _href='#', _style='margin-left: 10px;',
-        #       _onclick=(
-        #           'setCurrentMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
-        #     A(T('calendar__previous_week'), _href='#', _style='margin-left: 10px;',
-        #       _onclick=(
-        #           'setPreviousWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
-        #     A(T('calendar__previous_month'), _href='#', _style='margin-left: 10px;',
-        #       _onclick=(
-        #           'setPreviousMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;'))
-        # ))
+
 
         import itertools
-        search_fields = itertools.chain(*search_fields) # flatten
-        form =  GrandSQLFORM(*search_fields )
+        search_fields = itertools.chain(*search_fields) # flatten for SQLFORM.factory
+        form =  GrandSQLFORM(*search_fields , table_name="invoice")
+
+        # form =  GrandSQLFORM(*search_fields, form_factory = SOLIDFORM.factory )  # for SOLIDFORM
+
+
+
+        form.custom.widget.date_period.parent.append(CAT(
+            A(T('calendar__this_week'), _href='#', _style='margin-left: 10px;',
+              _onclick=(
+                  'setCurrentWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+            A(T('calendar__this_month'), _href='#', _style='margin-left: 10px;',
+              _onclick=(
+                  'setCurrentMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+            A(T('calendar__previous_week'), _href='#', _style='margin-left: 10px;',
+              _onclick=(
+                  'setPreviousWeek("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;')),
+            A(T('calendar__previous_month'), _href='#', _style='margin-left: 10px;',
+              _onclick=(
+                  'setPreviousMonth("#invoice_date_from", "#invoice_date_until", "#invoice_date_period"); return false;'))
+        ))
+
         # return form
-        return dict( form=form )
+        return dict( form=form,
+                     data=form.vars_as_Row()
+
+                     )
 
 
 def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
@@ -1016,6 +1045,14 @@ def test_70_group_by_val():
         rows_grouped[name] = [row['auth_group']['role'] for row in  rows_grouped[name] ]
         # rows_grouped[name] = BEAUTIFY(  rows_grouped[name]  )
     return CAT( SQLTABLE(rows), TABLE(map( TR, rows_grouped.items()) ), _border=2  )
+
+def test_70_common_filters():
+    db.auth_user._common_filter = lambda q: db.auth_user.id > 100
+    query= db.auth_user.email.contains('com')
+    return dict( query = db(query).query,
+                 sql = db(query)._select(db.auth_user.id, db.auth_user.email )
+                 )
+
 
 def test_80_postgre_distinct():
     sel = DalView(db.auth_user.first_name, distinct=True, translator=gt) # orderby=db.auth_user.first_name
