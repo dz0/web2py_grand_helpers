@@ -3,13 +3,18 @@
 from gluon import current
 import copy
 
-def joined_dicts(d1, d2):
+def join_dicts(d1, d2, result_as_new=True, allow_overlaping_keys=False):
 
-    overlaping_keys = set(d1.keys()) & set(d2.keys())
-    if overlaping_keys:
-        raise RuntimeError("joined_dicts got overlaping_keys: %r" % overlaping_keys)
+    if not allow_overlaping_keys:
+        overlaping_keys = set(d1.keys()) & set(d2.keys())
+        if overlaping_keys:
+            raise RuntimeError("join_dicts got overlaping_keys: %r" % overlaping_keys)
 
-    result = copy.copy(d1)
+    if result_as_new:
+        result = copy.copy(d1)
+    else:
+        result = d1
+
     for key, val in d2.items():
         if not key in d1:
             result[key] = val

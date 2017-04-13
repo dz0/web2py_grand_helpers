@@ -398,7 +398,7 @@ def test_47_grandregister():
 
     register = GrandRegister(cols,
                              cid='w2ui_test', # w2ui
-                             # dalview_maintable_name = 'test_grand',
+                             # maintable_name = 'test_grand',
 
                              # left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
                              dalview_left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
@@ -499,7 +499,7 @@ def test_62_granderp_subjects():
 
         register = GrandRegister(cols,
                                  cid=cid,
-                                 dalview_maintable_name='subject_subject',
+                                 maintable_name='subject_subject',
 
                                  dalview_left_join_chains=[
                                      [db.subject_subject, db.subject_address, db.address_address, db.address_country]
@@ -614,9 +614,9 @@ def test_63d_granderp_good_goods_representFK():
     ]
 
     register = GrandRegister(cols,
-                             grid_force_FK_table_represent=True,
+                             columns_force_FK_table_represent=True,
                              cid=cid,
-                             dalview_maintable_name='good',
+                             maintable_name='good',
                              search_fields=search_fields,
 
                              # force_FK_table_represent = False, # default True
@@ -656,17 +656,17 @@ def test_63z_granderp_good_goods_oldschool_cols():
     print 'dbg locals()', locals()
     context = locals()
     context['URL']=URL
-    w2ui_coldata_oldschool_js = render(content=content, context=context )
+    w2ui_gridoptions_oldschool_js = render(content=content, context=context )
 
     register = GrandRegister(None,
 
-                             grid_force_FK_table_represent=True,
+                             force_FK_table_represent=True,
                              cid=cid,
-                             dalview_maintable_name='good',
+                             maintable_name='good',
                              search_fields=[[
                                  SearchField( db.good.title, name='title', name_extension='', prepend_tablename=False, )
                              ]],
-                             grid_w2ui_coldata_oldschool_js = w2ui_coldata_oldschool_js
+                             w2ui_gridoptions_oldschool_js = w2ui_gridoptions_oldschool_js
 
                              # w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
 
@@ -679,14 +679,14 @@ def test_63z_granderp_good_goods_oldschool_cols():
                              , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
-                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             # ,w2grid_options_extra_toolbar_more = "BLA"
                              )
     result = register.render()
     # save_DAL_log()
     return result
 
 
-def test_63e_granderp_good_goods():
+def test_63e_granderp_good_goods_TODOcommon_filter():
 
     # gt = None
 
@@ -698,9 +698,13 @@ def test_63e_granderp_good_goods():
     #                         translated_set(db, auth, 'good_group', query=(db.good_group.active == True)),
     #                         multiple=True)
 
-    # db.good_group._common_filter = lambda q: q& db.good_group.active == True
+    db.good_group._common_filter = lambda q: q & db.good_group.active == True
+
+
     group_ids_validator=T_IS_IN_DB( gt,
-                                    db(db.good_group.active == True), db.good_group.id, db.good_group._format,  multiple=True)
+                                    # db(db.good_group.active == True),
+                                    db,
+                                    db.good_group.id, db.good_group._format,  multiple=True)
 
     group_ids = SearchField('group_ids', label=db.good.group_id.label,
                     requires=group_ids_validator,
@@ -735,7 +739,7 @@ def test_63e_granderp_good_goods():
 
         # hidden={'goods_autocomplete_title': URL('good', 'autocomplete_good_titles.json'),
         #         'goods_autocomplete_sku': URL('good', 'autocomplete_good_skus.json')},
-        # dalview_maintable_name='good'
+        # maintable_name='good'
 
     # return {'cid': cid, 'form': form, 'row_buttons': None, 'dataFile': db(db.good_settings).select().first().data_file}
     cols=[
@@ -754,9 +758,9 @@ def test_63e_granderp_good_goods():
 
     register = GrandRegister(cols,
 
-                             grid_force_FK_table_represent=True,
+                             columns_force_FK_table_represent=True,
                              cid=cid,
-                             dalview_maintable_name='good',
+                             maintable_name='good',
                              search_fields=search_fields,
 
                              grid_w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
@@ -770,7 +774,7 @@ def test_63e_granderp_good_goods():
                              , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
-                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             # ,w2grid_options_extra_toolbar_more = "BLA"
                              )
     result = register.render()
     # save_DAL_log()
@@ -878,7 +882,7 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
 
         *search_fields,
         cid=cid,
-        dalview_maintable_name='batches'
+        maintable_name='batches'
     )
 
     return  form
@@ -977,10 +981,10 @@ def test_66c_aggregate_warehouse_batches_Register():
 
     register = GrandRegister(cols,
 
-                             grid_force_FK_table_represent=True,
+                             columns_force_FK_table_represent=True,
                              cid='batches',
-                             # dalview_maintable_name='batches',
-                             # dalview_maintable_name='warehouse_batch',
+                             # maintable_name='batches',
+                             # maintable_name='warehouse_batch',
                              grid_data_name='batches',
                              search_fields=search_fields
 
@@ -996,7 +1000,7 @@ def test_66c_aggregate_warehouse_batches_Register():
                              , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
-                             # ,w2grid_options_extra_toolbar_extra = "BLA"
+                             # ,w2grid_options_extra_toolbar_more = "BLA"
                              )
     return register.render()
 
@@ -1024,7 +1028,7 @@ def test_00_dev_auth_has_permission():
 def test_01_virtual_field():
     db.define_table('demo',
                     Field('name')
-                    , Field.Virtual('virtual', f=lambda r: 'v...'+r.demo.name, dalview_maintable_name='demo')
+                    , Field.Virtual('virtual', f=lambda r: 'v...'+r.demo.name, maintable_name='demo')
                     , Field('bla', default="bla")
                     )
     db.demo.truncate()
