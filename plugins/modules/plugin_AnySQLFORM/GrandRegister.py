@@ -77,7 +77,7 @@ class GrandRegister( object ):
     )
 
     """
-    contexts = 'search w2ui crud dalview'
+    contexts = 'search w2ui crud dalview'.split()
     def __init__(self,
                  columns=None,
                  cid=None,  # usually request.function
@@ -156,7 +156,9 @@ class GrandRegister( object ):
 
             def extra_caution():
                 # check if param is not "orphaned" (name provided without context)
+                # or if it is not in wrong context
                 if ctx_name:
+                    # check orphaned
                     if arg_name in kwargs:
                         arg_val = kwargs[arg_name]  # TODO: maybe .pop()?
                         raise RuntimeError("Parameter %s=%r in kwargs (not in context ('%s_') args)"% (arg_name, arg_val, ctx_name))
@@ -164,15 +166,16 @@ class GrandRegister( object ):
                         arg_val = locals_of_init[ arg_name ]
                         raise RuntimeError("Parameter %s=%r in standart params (not in context ('%s_') args)"% (arg_name, arg_val, ctx_name))
 
-                    for other_ctx_name in  GrandRegister.contexts:
-                        if other_ctx_name != ctx_name:
-                            other_full_arg_name = other_ctx_name + "_" + arg_name
-                            if other_full_arg_name  in kwargs:
-                                arg_val = kwargs[other_full_arg_name ]
-                                raise RuntimeError("Parameter %s=%r in other context ('%s_) kwargs (not in context ('%s_') args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
-                            if other_full_arg_name  in list( func.__code__.co_varnames[:func.func_code.co_argcount]):
-                                arg_val = locals_of_init[ other_full_arg_name  ]
-                                raise RuntimeError("Parameter %s=%r in other context ('%s_) in standart params (not in context ('%s_') args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
+                # check wrong context
+                for other_ctx_name in  GrandRegister.contexts:
+                    if other_ctx_name != ctx_name:
+                        other_full_arg_name = other_ctx_name + "_" + arg_name
+                        if other_full_arg_name  in kwargs:
+                            arg_val = kwargs[other_full_arg_name ]
+                            raise RuntimeError("Parameter %s=%r in other context ('%s_) kwargs (not in context (%r) args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
+                        if other_full_arg_name  in list( func.__code__.co_varnames[:func.func_code.co_argcount]):
+                            arg_val = locals_of_init[ other_full_arg_name  ]
+                            raise RuntimeError("Parameter %s=%r in other context ('%s_) in standart params (not in context (%r) args)"% (arg_name, arg_val, other_ctx_name, ctx_name))
 
 
                 # a way to track deprecated args
@@ -217,7 +220,7 @@ class GrandRegister( object ):
 
         # search = copy.copy(search)  # todo: maybe make shallow copy  -- not to pollute it outside of func...
         # POPULATE CONTEXTS with args
-        for ctx in GrandRegister.contexts.split()+[None]:
+        for ctx in GrandRegister.contexts+[None]:
             # self.args[ctx] = self.args[ctx] or Storage()
             prepare_context(ctx)
 
