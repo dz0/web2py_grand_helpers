@@ -103,9 +103,11 @@ def test_23_virtual_field_dalview_search_TODO_orNotTODO():
 def test_25_SearchField_requires_multiple():
 
     form = SearchSQLFORM(
-         SearchField(db.auth_user.email, multiple=True, override_widget=True)
-        , SearchField(db.auth_membership.user_id, multiple=True,  override_widget=True)
-        , SearchField(db.auth_user.id, multiple=True,  override_widget=True)
+         # SearchField(db.auth_user.email, multiple=True, override_widget=True)
+        # Note: multiple=True forces override_widget=True
+         SearchField(db.auth_user.email, multiple=True)
+        , SearchField(db.auth_membership.user_id, multiple=True)
+        , SearchField(db.auth_user.id, multiple=True)
         # , keepvalues = True
         )
 

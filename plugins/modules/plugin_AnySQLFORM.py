@@ -151,7 +151,8 @@ class FormField( Field ):
 
 
         self.multiple = kwargs.pop('multiple', getattr(field, 'multiple', False)) # mainly for validators of references
-        self.override_widget = kwargs.pop('override_widget', getattr(field, 'override_widget', False)) # mainly for validators of references
+        # self.multiple (for requires) forces override_widget
+        self.override_widget = self.multiple or kwargs.pop('override_widget', getattr(field, 'override_widget', False)) # mainly for validators of references
         # print "DBG FormField multiple", self.multiple
 
         self.__dict__.update( kwargs )
@@ -317,7 +318,6 @@ class AnySQLFORM( object  ):
                 print "DBG, override FormField validator", f.name
                 f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=f.multiple)
                 f.validator_overriden = f.use_default_IS_IN_DB = True
-                # f.override_widget = True # as it is overriden already
 
 
 
@@ -503,6 +503,8 @@ class SearchField( FormField ):
 
         if self.comparison == 'belongs':
             self.multiple = True
+        if self.multiple:
+            self.override_widget = True # just in case
 
         # name extension (based on comparison)
         extensions = {   '!=': 'not_equal',
