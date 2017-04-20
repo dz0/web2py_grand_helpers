@@ -3,11 +3,12 @@ from gluon import current
 from pydal.objects import Field, Row, Expression
 from gluon.html import PRE
 
-from helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
-from helpers import sql_log_format, get_sql_log, save_DAL_log, sql_log_find_last_pos, set_TIMINGSSIZE
+from plugin_grand_helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
+from plugin_grand_helpers import tidy_SQL, sql_log_format, get_sql_log, save_DAL_log, sql_log_find_last_pos, set_TIMINGSSIZE
+from plugin_grand_helpers import append_unique, is_aggregate
 
 ####### DALSELECT ##########
-from plugin_joins_builder.joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
+from plugin_joins_builder import build_joins_chain , get_referenced_table # uses another grand plugin
 
 
 def rename_row_fields(names_map, row, remove_src=True):
@@ -118,7 +119,6 @@ class DalView(Storage):
 
         extra_aggregates should be used in case we have aggregate expressions as strings
         """
-        from helpers import append_unique, is_aggregate
 
         aggregate_fields = list( filter( is_aggregate, self.columns ) ) + extra_aggregates
 
@@ -272,7 +272,6 @@ class DalView(Storage):
 
 
     def get_sql(self, translate=True, t=None):
-        from helpers import tidy_SQL
         self.guarantee_table_in_query()
         t = t or self.translate_expressions()
         if translate and t:
@@ -430,9 +429,9 @@ def agg_list_singleton(vfield, context_rows):
         # grouped = defaultdict(list)
         # grouped.update( rows_4grouping.group_by_value(groupby)  )
 
+        grouped = Storage(grouped)
         # log sql
         if getattr(current, 'DBG', None):  # TODO change to LOG_SQL ?
-            grouped = Storage( grouped )
             grouped.sql = selection.get_sql() 
             grouped.sql_nontranslated = selection.get_sql(translate=False)
         

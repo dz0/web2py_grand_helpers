@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
 # from gluon import current
-from AnySQLFORM import *
+from plugin_AnySQLFORM import *
 from gluon.html import URL, A, CAT, DIV, BEAUTIFY, PRE
 from modules.helpers import TOTAL_ROWS
 
-from DalView import *
-from GrandTranslator import *
+from plugin_DalView import *
+from plugin_GrandTranslator import *
 # from pydal._globals import DEFAULT
 
-from helpers import get_fields_from_table_format, save_DAL_log, is_reference, update_dict_override_empty, join_dicts
+from plugin_grand_helpers import get_fields_from_table_format, save_DAL_log, is_reference, update_dict_override_empty, join_dicts, test_fields, get_distinct
 from lib.w2ui import serialized_lists, make_orderby, save_export
 
         
@@ -84,7 +84,7 @@ class GrandRegister( object ):
                  maintable_name=None,  # mostly needed for recid while migrating from oldschool :  w2ui_w2ui_coldata_oldschool_js
                  columns_force_FK_table_represent=False,  # later could rename: columns_force_FK_table_represent
 
-                 response_view = "plugin_AnySQLFORM/w2ui_grid.html",
+                 response_view = "plugin_GrandRegister/w2ui_grid.html",
 
                  # Contexts of args
                     search = None,
@@ -154,7 +154,7 @@ class GrandRegister( object ):
             elif full_arg_name in kwargs:
                 arg_val = kwargs[full_arg_name] # TODO: maybe .pop()?
 
-            def extra_caution():
+            def extra_caution(arg_val):
                 # check if param is not "orphaned" (name provided without context)
                 # or if it is not in wrong context
                 if ctx_name:
@@ -186,7 +186,7 @@ class GrandRegister( object ):
                 if ctx_name in deprecated_ctxs:
                     raise RuntimeError("Deprecated context %r with arg %s=%r." % (ctx_name, arg_name, arg_val))
 
-            extra_caution()
+            extra_caution(arg_val)
 
             if ctx_name:
                 ctx_kwargs  =   locals_of_init[ctx_name] or getattr(self, ctx_name, None)  or Storage()  # get from param or attr or new
@@ -233,7 +233,7 @@ class GrandRegister( object ):
 
         # COLUMNS stuff
 
-        if self.columns and not self.w2ui.coldata_oldschool_js:
+        if self.columns and not self.w2ui.gridoptions_oldschool_js:
             def init_maintable_name_and_recid():
                 # if not self.columns:     return
                 db = current.db
@@ -261,7 +261,8 @@ class GrandRegister( object ):
                         self.columns[nr] = represent_FK( col )
 
             #TODO: maybe move TOTALROWS column addition here
-
+        else:
+            self.recid = kwargs['recid_4oldschool']
         # ordinary params
 
         self.response_view = response_view
@@ -288,7 +289,7 @@ class GrandRegister( object ):
         # response.menu = response.menu or []
 
 
-        if not self.w2ui.coldata_oldschool_js and self.columns : # backwards compatibility (while migrating) one can use oldschool defs taken from  templates (can be rendered with  gluon.template.render(content='...', context=<vars>)
+        if not self.w2ui.gridoptions_oldschool_js and self.columns : # backwards compatibility (while migrating) one can use oldschool defs taken from  templates (can be rendered with  gluon.template.render(content='...', context=<vars>)
 
             self.columns.append(TOTAL_ROWS)  #
 
@@ -332,7 +333,7 @@ class GrandRegister( object ):
 
                 del self.w2ui.columns[-1]  # remove TOTAL_ROWS from end...
 
-        w2ui_init_columns()
+            w2ui_init_columns()
 
         def w2ui_init_crud_actions():
             crud = self.crud
@@ -647,7 +648,7 @@ class GrandRegister( object ):
             # _compact = rows.compact
             rows.compact = False
 
-            from helpers import force_refs_represent_ordinary_int
+            from plugin_grand_helpers import force_refs_represent_ordinary_int
             force_refs_represent_ordinary_int(rows)  # otherwise rows.render() would call extra selects for each row for each FK
 
 
@@ -703,7 +704,7 @@ class GrandRegister( object ):
 
 
 
-class GrandSQLFORM(QuerySQLFORM):
+class GrandSQLFORM(SearchSQLFORM):
     """adds translator and uses it to generate validators_with_T """
 
     def __init__(self, *fields, **kwargs):
@@ -720,31 +721,33 @@ class GrandSQLFORM(QuerySQLFORM):
         # def default_IS_IN_DB(*args, **kwargs): return T_IS_IN_DB(gt, *args, **kwargs)
 
         kwargs.setdefault('maintable_name', 'GrandSQLFORM')
-        QuerySQLFORM.__init__(self, *fields, **kwargs)
+        SearchSQLFORM.__init__(self, *fields, **kwargs)
         pass
 
 
 
-    def set_default_validator(self, f):
+    def set_default_widget(self, f):
 
 
-        if f.override_validator==False:  # do not override
+        if f.override_widget==False:  # do not override
             return
 
         if not self.translator:
-            QuerySQLFORM.set_default_validator(self, f)
+            SearchSQLFORM.set_default_widget(self, f)
             return
 
         if self.translator.is_validator_translated(f.requires):  # if already translated
             return
 
+        if self.translator.is_widget_translated(f.widget):
+            return
 
 
         db = current.db  # todo: for Reactive form should be prefiltered dbset
         target = f.target_expression  # for brevity
 
         if f.type.startswith('reference ') or f.type.startswith('list:reference '):
-            if not f.requires or f.requires == DEFAULT or f.override_validator:
+            if not f.requires or f.requires == DEFAULT or f.override_widget:
                 foreign_table = f.type.split()[1]
                 foreign_table = foreign_table.split(':')[-1] # get rid of possible "list:"
                 # f.requires = self.default_IS_IN_DB(db, db[foreign_table], db[foreign_table]._format)
@@ -761,12 +764,12 @@ class GrandSQLFORM(QuerySQLFORM):
 
         # if field needs to be translated
         if str(target) in map(str, self.translator.fields):
-
+            distinct=get_distinct(target)
             if  isinstance(target, Field) :
                 if f.type in ('string', 'text'):  # maybe also number type? or list:string
 
                     if f.comparison in [ 'equal', 'belongs']:
-                        f.requires = T_IS_IN_DB(self.translator, db, target, multiple=f.multiple, distinct=True)
+                        f.requires = T_IS_IN_DB(self.translator, db, target, multiple=f.multiple, distinct=distinct)
 
                     if f.comparison == 'contains':
                         # f.requires = IS_IN_DB(db, target)
@@ -775,7 +778,7 @@ class GrandSQLFORM(QuerySQLFORM):
                         f.widget = T_AutocompleteWidget( self.translator,
                             current.request,
                             target,
-                            distinct=True,
+                            distinct=distinct,
                             # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
                             # , recid=db.category.id
                         )
@@ -784,12 +787,12 @@ class GrandSQLFORM(QuerySQLFORM):
             # should work for Expression targets  -- and (seems) doesn't depend on translation
                 target = f.target_expression
                 # theset = db(target._table).select(target).column(target)
-                theset = DalView(target, distinct=target, translator=self.translator).execute().column(target)
+                theset = DalView(target, distinct=distinct, translator=self.translator).execute().column(target)
                 f.requires = IS_IN_SET(theset, multiple=f.multiple)
 
 
         else:  # for Field targets...
-            QuerySQLFORM.set_default_validator(self, f)
+            SearchSQLFORM.set_default_widget(self, f)
 
 
 

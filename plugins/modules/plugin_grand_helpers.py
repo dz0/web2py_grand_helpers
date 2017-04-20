@@ -21,6 +21,7 @@ def join_dicts(d1, d2, result_as_new=True, allow_overlaping_keys=False):
     return result
 
 def update_dict_override_empty(d1, d2):
+    raise RuntimeError("Depreciated?")
     for key, val in d2.items():
         if key in d1 and d1[key]: # if already has some important value
             continue
@@ -78,6 +79,40 @@ def is_id(field):
     return str(field)==str(field.table._id) or is_reference(field)
 
 
+
+
+def get_expressions_from_formfields( formfields, include_orphans=False ):
+    from plugin_AnySQLFORM import  FormField
+    from pydal import Field
+    from pydal.objects import Expression
+    # result = []
+    # for f in formfields_flat:
+    #     if isinstance(f, FormField):
+    #         result.append( f.target_expression )
+    #     else:
+    #         result.append( f )
+    result =  [f.target_expression if isinstance(f, FormField) else f     for f in formfields ]
+    if not include_orphans:
+        result = [expr for expr in result
+                        if isinstance(expr, Field) and getattr(expr, 'tablename', 'no_table') != 'no_table'
+                        or type(expr) is Expression
+                  ]
+    return result
+
+def get_distinct(target):
+    db = current.db
+
+    # return True
+    # return target
+    import pydal
+    # TODO FIXME chekc if this works
+    if isinstance(db._adapter , pydal.adapters.sqlite.SQLiteAdapter ):
+        return True
+    elif isinstance(db._adapter, pydal.adapters.postgres.PostgreSQLAdapter):
+        return target
+    else:
+        print "WARNING: not sure what should be passed as 'distinct' arg for adapter %r" % db._adapter
+        return True
 
 
 #
@@ -197,3 +232,76 @@ def save_DAL_log(file='/tmp/web2py_sql.log.html', mode='w', flush=False):
 
     if flush:
         del timings[:]
+
+def make_menu(controller_dir, menuname=None, append=False):
+    from gluon.html import URL
+
+    test_functions = [x for x in controller_dir if x.startswith('test') and x!='tester']
+    test_functions.sort()
+
+    menu = [
+                     (menuname or 'TESTS', False, '',
+                        [
+                            (f, f==current.request.function, URL(f) )
+                            for f in test_functions
+                        ]
+                     ),
+                     # ('populate auth tables', False, URL('populate_fake_auth') ),
+                    ]
+    if append and current.response.menu:
+        current.response.menu.extend( menu )
+    else:
+        current.response.menu = menu
+    return menu
+
+
+
+# FOR TEST controllers
+
+TEST_FIELDS = None
+
+def test_fields():
+    if globals().get('TEST_FIELDS') is None:
+        db = current.db
+        from pydal import Field
+        from plugin_AnySQLFORM import FormField, SearchField
+        from gluon.validators import IS_IN_DB
+        global TEST_FIELDS
+        orphan_with_target = Field('orphan_name')
+        orphan_with_target.target_expression = db.auth_user.last_name + "bla"
+
+        TEST_FIELDS = [
+
+            db.auth_user.first_name,
+            db.auth_user.email,
+
+            db.auth_user.id,
+            db.auth_group.role,  # db.auth_group.description,
+
+            FormField(db.auth_permission.table_name,
+                      requires=IS_IN_DB(db, db.auth_permission.table_name, multiple=True),
+                      comparison='equal'),
+            SearchField(db.auth_permission.id,
+                        requires=IS_IN_DB(db, db.auth_permission, "%(name)s: %(table_name)s %(record_id)s") # possibly overriden..
+                        ),
+
+            # no_table items
+            Field('user_id', type='reference auth_user'),
+            #        FormField('user_id', type='reference auth_user'),
+
+            Field('bla'),
+            #        FormField( 'bla'),
+            #         FormField( Field( 'expr_as_value' ), target_expression='string_value' ),  # orphan field with expression in kwargs
+            #         FormField( 'direct_name', target_expression='direct_name_expr' ),  #  name with expression with expression in kwargs
+            #         FormField( 5, name='str_expr_firstarg' ),  #  expression first -- even if it is just value
+
+            orphan_with_target,
+            # expression (as target)
+            FormField(db.auth_user.first_name + db.auth_user.last_name, name='full_name', comparison='equal'),
+            FormField(Field('pure_inputname_in_form'), name_extension='', prepend_tablename=False,
+                      target_expression='pure'),
+        ]
+    return TEST_FIELDS
+
+
+# test_fields()

@@ -4,7 +4,8 @@ from gluon import current
 from pydal.objects import Field, Row, Expression
 from pydal.objects import SQLALL, Query
 
-from DalView import DalView
+from plugin_DalView import DalView
+from plugin_grand_helpers import test_fields
 
 
 # for Validator with translator

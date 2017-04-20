@@ -13,7 +13,7 @@ from collections import defaultdict
 
 from pydal._globals import DEFAULT
 
-from helpers import is_aggregate
+from plugin_grand_helpers import is_aggregate, get_distinct
 
 DEFAULT_TABLE_NAME = 'AnySQLFORM'
 
@@ -151,7 +151,7 @@ class FormField( Field ):
 
 
         self.multiple = kwargs.pop('multiple', getattr(field, 'multiple', False)) # mainly for validators of references
-        self.override_validator = kwargs.pop('override_validator', getattr(field, 'override_validator', False)) # mainly for validators of references
+        self.override_widget = kwargs.pop('override_widget', getattr(field, 'override_widget', False)) # mainly for validators of references
         # print "DBG FormField multiple", self.multiple
 
         self.__dict__.update( kwargs )
@@ -285,7 +285,7 @@ class AnySQLFORM( object  ):
 
         # self.default_IS_IN_DB = kwargs.pop('default_IS_IN_DB', None)
         for f in self.formfields_flat:
-            self.set_default_validator(f)
+            self.set_default_widget(f)
 
         ######### generate form #############
         # print "dbg AnySQLFORM kwargs", kwargs
@@ -301,7 +301,7 @@ class AnySQLFORM( object  ):
         
         self.db = current.db
 
-    def set_default_validator(self, f):
+    def set_default_widget(self, f):
         """to be overriden -- example in translations..."""
         # TODO maybe use  gluon.validators  _default_validators()
 
@@ -313,11 +313,12 @@ class AnySQLFORM( object  ):
 
         if f.type.startswith('reference ') or f.type.startswith('list:reference '):
             foreign_table = f.type.split()[1]
-            if not f.requires or f.requires == DEFAULT or f.override_validator:
+            if not f.requires or f.requires == DEFAULT or f.override_widget:
                 print "DBG, override FormField validator", f.name
-                f.requires = IS_EMPTY_OR(
-                    IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=f.multiple))
+                f.requires = IS_IN_DB(db, db[foreign_table], db[foreign_table]._format, multiple=f.multiple)
                 f.validator_overriden = f.use_default_IS_IN_DB = True
+                # f.override_widget = True # as it is overriden already
+
 
 
     def __getattr__( self, name ):
@@ -381,8 +382,15 @@ class AnySQLFORM( object  ):
             # default to self.vars
             if not self.vars:
                 # session=None, formname=None  ---  to prevent _formkey (and _formname), which later wouldn't let multiple times access via ajax
-                self.process(session=None, formname=None, keepvalues=True, hideerror=True, dbio=False, onfailure=None)
                 # self.process(keepvalues=True, hideerror=True, dbio=False)
+
+
+                # self.process(session=None, formname=None, keepvalues=True, hideerror=True, dbio=False, onfailure=None)    # causes problems for SQLFORM  multiple reference:
+                from gluon.html import FORM
+                FORM.accepts(self._AnySQLFORM__form, current.request.vars,
+                             session=None, formname=None, keepvalues=True, onvalidation=None, hideerror=True)
+
+                # self.accepts(session=None, formname=None, keepvalues=True, hideerror=True, dbio=False, onfailure=None)
             vars = self.vars
         # return current.request.vars.get( field.name, None ) 
         
@@ -527,7 +535,7 @@ class SearchField( FormField ):
         if self.name_extension: # we could give      name_extension = ''  (in kwargs), so it is not appended
             new_name += '__'+self.name_extension
 
-        # few special cases -- for
+        # few special cases -- for w2ui grid
         if self.comparison == 'belongs' :  # in input: multiple=True
             if not new_name.endswith('[]'):
                 new_name += '[]'
@@ -601,7 +609,7 @@ class SearchField( FormField ):
 
         
         
-class QuerySQLFORM (AnySQLFORM ):
+class SearchSQLFORM (AnySQLFORM ):
     
     def __init__(self, *fields,  **kwargs ):
 
@@ -621,11 +629,11 @@ class QuerySQLFORM (AnySQLFORM ):
         #     for jchain in self.join_chains:
         #         self.left.extend( build_join_chain( jchain ) )
         """
-        # table_name = kwargs.pop('table_name', 'QuerySQLFORM'),
-        kwargs.setdefault('table_name', 'QuerySQLFORM')
+        # table_name = kwargs.pop('table_name', 'SearchSQLFORM'),
+        kwargs.setdefault('table_name', 'SearchSQLFORM')
         kwargs.setdefault('field_decorator', SearchField)
         AnySQLFORM.__init__(self, *fields,  **kwargs)
-        # super(QuerySQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
+        # super(SearchSQLFORM, self).__init__( *fields, field_decorator=SearchField,  **kwargs)
         # self.formfields_flat = [f if isinstance(f, SearchField) else SearchField(f) for f in fields ]
         # assertions
         try:
@@ -633,9 +641,9 @@ class QuerySQLFORM (AnySQLFORM ):
         except RuntimeError as e:
             raise RuntimeError("QueryForm fields shouldn't have same combination of expression and comparison. \n %s" % e)
 
-    def set_default_validator(self, f):
+    def set_default_widget(self, f):
 
-        if f.requires and f.requires != DEFAULT and f.override_validator==False:  # do not override if sth set...
+        if f.requires and f.requires != DEFAULT and f.override_widget==False:  # do not override if sth set...
             return
 
         db = current.db  # todo: for Reactive form should be prefiltered dbset
@@ -648,9 +656,9 @@ class QuerySQLFORM (AnySQLFORM ):
 
 
         if isinstance(target, Field) and  f.type in ('string', 'text'):  # todo: maybe add other types here
-
+                distinct = get_distinct(target)
                 if f.comparison in ['equal', 'belongs']:
-                    f.requires = IS_IN_DB(db, target, multiple=f.multiple, distinct=True)
+                    f.requires = IS_IN_DB(db, target, multiple=f.multiple, distinct=distinct)
 
                 if f.comparison == 'contains':
                     # f.requires = IS_IN_DB(db, target)
@@ -658,7 +666,7 @@ class QuerySQLFORM (AnySQLFORM ):
                     f.widget = SQLFORM.widgets.autocomplete(
                         current.request,
                         target,
-                        distinct=True
+                        distinct=distinct
 
                         # , keyword='_autocomplete_%(tablename)s_%(fieldname)s__'+f.name # in case there would be 2 same targets
                         #, recid=db.category.id
@@ -667,17 +675,34 @@ class QuerySQLFORM (AnySQLFORM ):
 
         elif type(target) is Expression:
             table = target._table
-            theset = db(table).select(target, distinct=target).column(target)
+            theset = db(table).select(target, distinct=distinct).column(target)
+            # theset = db(table).select(target , distinct=True).column(target)
             f.requires = IS_IN_SET(theset, multiple=f.multiple)
 
         else:
-            AnySQLFORM.set_default_validator(self, f)
+            AnySQLFORM.set_default_widget(self, f)
 
 
     def build_queries(self, ignore_orphaned_fields=False):
         db = self.db
         queries = []
         queries_4aggregates = []
+
+        ## hack to prevent problems because of '[]' at the end of vars -- and possibly wrong type
+        # def rename_trimBrackets_in_fields_and_request_vars():
+        #     for f in self.formfields_flat:
+        #         if f.name.endswith('[]'):
+        #             f.name = f.name[:-2]
+        #
+        #     for key, val in current.request.vars.items():
+        #         if key.endswith('[]'):
+        #             del current.request.vars[key]
+        #             newkey = key[:-2]
+        #             current.request.vars[newkey] = val
+        #
+        # rename_trimBrackets_in_fields_and_request_vars()
+
+
         # for filter in flattened_filters:
         for f in self.formfields_flat:
             input_value =  self.get_value( f )  # gets the input value
@@ -728,24 +753,6 @@ class QuerySQLFORM (AnySQLFORM ):
     # def having(self):
         # return self.build_queries().having
         
-
-###########
-# some helpers
-
-def get_expressions_from_formfields( formfields, include_orphans=False ):
-    # result = []
-    # for f in formfields_flat:
-    #     if isinstance(f, FormField):
-    #         result.append( f.target_expression )
-    #     else:
-    #         result.append( f )
-    result =  [f.target_expression if isinstance(f, FormField) else f     for f in formfields ]
-    if not include_orphans:
-        result = [expr for expr in result
-                        if isinstance(expr, Field) and getattr(expr, 'tablename', 'no_table') != 'no_table'
-                        or type(expr) is Expression
-                  ]
-    return result
 
 
 ############

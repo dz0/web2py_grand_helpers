@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-# from joins_builder import build_joins_chain
-from plugin_joins_builder.joins_builder import build_joins_chain
-# from applications.app.modules.plugin_joins_builder.joins_builder import build_joins_chain
+from plugin_joins_builder import build_joins_chain
 
 """
 for TEST purposes 
@@ -95,7 +93,7 @@ def test4__table_and_fields():  # OK
                 ] 
     )
 
-def test5_table_alias():  # seems OK     # TODO -- better parse alias'es ;)
+def test5_table_alias_ERROR():  # seems OK     # TODO -- better parse alias'es ;)
     
     # BUG SQLFORM.grid   doesn't give any row if auth_user is aliased
      

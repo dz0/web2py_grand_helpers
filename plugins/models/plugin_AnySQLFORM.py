@@ -21,6 +21,6 @@ current.db = db
 
 
 # monkeypach the sql log (dbstats or _timings) size
-from plugin_AnySQLFORM.helpers import set_TIMINGSSIZE
+from plugin_grand_helpers import set_TIMINGSSIZE
 # set_TIMINGSSIZE(100)
 
