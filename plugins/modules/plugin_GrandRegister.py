@@ -82,7 +82,7 @@ class GrandRegister( object ):
                  columns=None,
                  cid=None,  # usually request.function
                  maintable_name=None,  # mostly needed for recid while migrating from oldschool :  w2ui_w2ui_coldata_oldschool_js
-                 columns_force_FK_table_represent=False,  # later could rename: columns_force_FK_table_represent
+                 columns_force_FK_table_represent=False,
 
                  response_view = "plugin_GrandRegister/w2ui_grid.html",
 
@@ -269,11 +269,13 @@ class GrandRegister( object ):
 
 
 
+        # for backward compatibility
+        # self.left_join_chains = dalview_left_join_chains or kwargs.get('left_join_chains') # probably would be enough
+        self.left_join_chains = self.dalview.left_join_chains
+        self.left = self.dalview.left
+        self.translator = self.dalview.translator
 
-        self.left_join_chains = dalview_left_join_chains or kwargs.get('left_join_chains') # probably would be enough
-
-
-        self.kwargs = self.kwargs = kwargs # TODO: dispach to contexts: search | grid | crud
+        self.kwargs = kwargs # TODO: dispach to contexts: search | grid | crud
 
 
 
@@ -399,7 +401,7 @@ class GrandRegister( object ):
 
         search_fields = self.search.pop('fields', None)  # in form_factory they need to be separated form kwargs
 
-        self.search_form = GrandSQLFORM( *search_fields, **self.search )
+        self.search_form = GrandSQLFORM( *search_fields, **join_dicts(self.search, self.dalview) )
 
         self.search.fields = search_fields  # put them back (just in case :))
 
