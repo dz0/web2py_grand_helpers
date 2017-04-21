@@ -1,4 +1,5 @@
-{{ extend SEARCHING_GRID }}
+
+{{ extend globals().get('parent_layout', SEARCHING_GRID) }}
 
 {{ block js }}
     {{ import simplejson  }}
