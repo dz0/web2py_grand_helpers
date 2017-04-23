@@ -51,6 +51,11 @@ def extend_with_unique(A, B):
         if  str(b) not in map(str, A):
             A.append(b)
 
+def prepend_with_unique(A, B):
+    for b in B:
+        if  str(b) not in map(str, A):
+            A.insert(0, b)
+
 def append_unique(A, b):
     "for fields/expressions"
     if str(b) not in map(str, A):
@@ -232,6 +237,27 @@ def save_DAL_log(file='/tmp/web2py_sql.log.html', mode='w', flush=False):
 
     if flush:
         del timings[:]
+
+
+
+
+
+
+##################
+def represent_joins( joins ):
+    # def ON(self, first, second):
+    #     table_rname = self.table_alias(first)
+    #     if use_common_filters(second):
+    #         second = self.common_filter(second,[first._tablename])
+    #     return ('%s ON %s') % (self.expand(table_rname), self.expand(second))
+
+    reprs = []
+    db = current.db
+    for expr in joins:
+        reprs.append( db._adapter.ON( expr.first, expr.second ))
+
+    return reprs
+###################
 
 def make_menu(controller_dir, menuname=None, append=False):
     from gluon.html import URL

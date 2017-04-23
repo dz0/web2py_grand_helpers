@@ -187,13 +187,19 @@ class T_AutocompleteWidget( AutocompleteWidget ):
         if self.keyword in self.request.vars:
             field = self.fields[0]
 
-            rows = DalView(*(self.fields+self.help_fields),
+            selection = DalView(*(self.fields+self.help_fields),
                            translator=self.translator,
 
-                           query=field.contains(self.request.vars[self.keyword], case_sensitive=False),
+                           query=field.contains(self.request.vars[self.keyword], case_sensitive=False)
                            # query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
-                           orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
-                           ).execute() # compact=False
+                           , orderby=self.orderby
+                           # , distinct=self.distinct # FIXME TODO
+                           , limitby=self.limitby
+                           )
+            if getattr(current, 'DBG', None):
+                current.session.T_AutocompleteWidget_SQL = selection.get_sql()
+
+            rows = selection.execute() # compact=False
             # rows.compact = True # peculiarities of DAL..
 
             # rows = self.db(field.like(self.request.vars[self.keyword] + '%', case_sensitive=False)).select(orderby=self.orderby, limitby=self.limitby, distinct=self.distinct, *(self.fields+self.help_fields))
@@ -255,7 +261,9 @@ class T_AutocompleteWidget( AutocompleteWidget ):
                                translator=self.translator,
 
                                query=field.like(self.request.vars[self.keyword] + '%', case_sensitive=False),
-                               orderby=self.orderby, limitby=self.limitby, distinct=self.distinct
+                               orderby=self.orderby,
+                               limitby=self.limitby,
+                               distinct=self.distinct
                                ).execute() # compact=False
             if rows:
                 if self.is_reference:

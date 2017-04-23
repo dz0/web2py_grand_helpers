@@ -97,6 +97,7 @@ class GrandRegister( object ):
                     # left_join_chains=None,  # probably would be enough (or [[]])
                     dalview_left_join_chains = None,
                     dalview_left=None,
+                    dalview_smart_groupby=None,
 
                  # SEARCH
                     # search_fields = None,

@@ -101,20 +101,58 @@ class DalView(Storage):
     and adds join_chains property (which can infer some usefull info for ReactiveSQLFORM)
     """
 
-    def smart_distinct(self, kwargs):
+    def smart_orderby_prepend_distinct(self, kwargs):
         """for Postgre, when selecting distinct nonkeys, they should include the orderby"""
-        if kwargs.distinct:
-            kwargs.setdefault( 'orderby', [] )  # make it list (if it is not yet)
-            # kwargs.orderby. extend( kwargs.distinct )
-            if isinstance(kwargs.distinct , (list, tuple)):
-                extend_with_unique( kwargs.orderby, kwargs.distinct)
-            if kwargs.distinct==True:
-                kwargs.distinct = []
-                extend_with_unique( kwargs.distinct, self.columns )
-                extend_with_unique( kwargs.orderby, kwargs.distinct)
+        db = current.db
+        import pydal
+
+        if isinstance(db._adapter, pydal.adapters.postgres.PostgreSQLAdapter):
+            if kwargs.distinct:
+                # kwargs.orderby. extend( kwargs.distinct )
+                if isinstance(kwargs.distinct , (list, tuple)):
+                    # extend_with_unique( kwargs.orderby, kwargs.distinct)
+                    prepend_orderby = reduce(lambda a,b: a|b, kwargs.distinct )
+                else:
+                    prepend_orderby = kwargs.distinct
+
+                if kwargs.orderby:
+                    kwargs.orderby = prepend_orderby | kwargs.orderby
+                else:
+                    kwargs.orderby = prepend_orderby
+
+                # if kwargs.distinct==True:
+                #     kwargs.distinct = []
+                #     extend_with_unique( kwargs.distinct, self.columns )
+                #     extend_with_unique( kwargs.orderby, kwargs.distinct)
+
+    def get_involved_tables(self, query, fields):
+        db = current.db
+        tables = db._adapter.tables # traverses expr and extracts tables
+
+        tablenames = tables(query)
+        tablenames_for_common_filters = tablenames
+        for field in fields:
+            for tablename in tables(field):
+                if not tablename in tablenames:
+                    tablenames.append(tablename)
+
+        return [db[tname] for tname in tablenames]
 
 
-    def missing_groupby_on_aggregate(self, kwargs, extra_aggregates=[]):
+    def smart_groupby_instead_of_distinct(self):
+        tables = self.get_involved_tables()
+
+        # translations_coalesce = self.translator.translate( self.columns )['expr']
+        if self.translation:
+            translations_coalesce = self.translation.columns
+
+        fields = [t.id for t in tables] + translations_coalesce
+        if len(fields) > 1:
+            return reduce( lambda a, b: a|b, fields )
+        else:
+            return fields[0]
+
+    def smart_groupby_missing_for_aggregate__WRONG__needs_coalesces__see_instead_of_distinct(self, kwargs, extra_aggregates=[]):
         """for Postgre - when selecting aggregates, other fields must be grouped
 
         extra_aggregates should be used in case we have aggregate expressions as strings
@@ -162,8 +200,8 @@ class DalView(Storage):
     def kwargs_4select(self, translation=None):
         kwargs = Storage( {key:self[key] for key in SELECT_ARGS if self[key]} )
 
-        # self.smart_distinct(kwargs)
-        extra_groupby = self.missing_groupby_on_aggregate(kwargs) # for postgress
+        self.smart_orderby_prepend_distinct(kwargs)
+        # extra_groupby = self.smart_groupby_missing_for_aggregate(kwargs) # for postgress
 
         if translation:   # inject translated stuff
             if kwargs.get( 'left' ):
@@ -173,16 +211,20 @@ class DalView(Storage):
             else:
                 kwargs[ 'left' ] =  translation[ 'left' ]
 
-            if extra_groupby:
-                t2 = self.translator.translate(extra_groupby)
-                if t2:  extra_groupby = t2.expr
+            # if extra_groupby:
+            #     t2 = self.translator.translate(extra_groupby)
+            #     if t2:  extra_groupby = t2.expr
 
             for key in SELECT_ARGS:
                 if key == 'left': continue # we already applied this
                 if key in translation:
                     kwargs[key] = translation[key]
 
-        kwargs['groupby'] = kwargs['groupby'] | extra_groupby     if  kwargs['groupby']      else extra_groupby
+        # kwargs['groupby'] = kwargs['groupby'] | extra_groupby     if  kwargs['groupby']      else extra_groupby
+
+        if self.distinct and self.smart_groupby:
+            kwargs['groupby'] = self.smart_groupby_instead_of_distinct()
+
 
         if hasattr(current, 'dev_limitby'):
             kwargs['limitby'] = kwargs['limitby'] or current.dev_limitby  # from models/dev.py
@@ -199,27 +241,44 @@ class DalView(Storage):
         """
         self.columns = columns
         self.db = current.db
+        self.translation = None
 
 
-        for key in SELECT_ARGS+('query', 'left_given', 'join_given', 'left_join_chains', 'inner_join_chains', 'translator'):
+        for key in SELECT_ARGS+('query',
+                                'smart_groupby',
+                                'left_join_chain', 'inner_join_chain',
+                                'left_join_chains', 'inner_join_chains',
+                                'left_append', 'join_append',  # would be appended after join_chains # TODO maybe deprecate
+                                'append_join_chains', # doesn't check duplication over ordinary left/join
+                                'translator'):
             self[key] = kwargs.pop(key, None)
 
-        # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
+        def some_caution():
+            assert not( self.left_join_chain and self.left_join_chains )
+            assert not( self.inner_join_chain and self.inner_join_chains )
 
-        if self.left and self.left_join_chains :
-            raise RuntimeError("Overlapping args for left...join_chains, %s" % self.left_join_chains)
+            # later we manipulate variable name with plural ...join_chainS, but when giving args, singular is most often used
+            if self.left_join_chain: self.left_join_chains = [ self.left_join_chain ]
+            if self.inner_join_chain: self.inner_join_chains = [ self.inner_join_chain ]
 
-        if self.join and self.inner_join_chains :
-            raise RuntimeError("Overlapping args for inner...join_chains, %s" % self.inner_join_chains)
-        
-        if not self.left :
-            self.get_join('left') # default
-            
-        if not self.join :
-            self.get_join('inner')
+            if not self.append_join_chains:
+                # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
+                from plugin_grand_helpers import  represent_joins
+                if self.left and self.left_join_chains :
+                    raise RuntimeError("Overlapping args for left...join_chains: \n left: %r\n left_join_chains: %r" % (represent_joins( self.left ), self.left_join_chains))
+
+                if self.join and self.inner_join_chains :
+                    raise RuntimeError("Overlapping args for inner...join_chains\n join: %r\n inner_join_chains: %r" % (represent_joins(self.join), self.inner_join_chains))
+
+        some_caution()
+
+
+        self.get_join('left') # default
+
+        self.get_join('inner')
 
         self.kwargs = kwargs # not used...
-            
+
     def get_join_chains( type_ = 'left'):
         #parse chains and return tablenames
         return "TODO" 
@@ -230,22 +289,23 @@ class DalView(Storage):
         if type_=='left':
             if not self.left :
                 self.left = []
-                if self.left_join_chains:
-                    for jchain in self.left_join_chains:
-                        self.left.extend( build_joins_chain(  *jchain ) )
-                if self.left_given:
-                    self.left.extend(self.left_given)
+            if self.left_join_chains:
+                for jchain in self.left_join_chains:
+                    self.left.extend( build_joins_chain(  *jchain ) )
+            if self.left_append:
+                self.left.extend(self.left_append)
             return self.left
               
         if type_=='inner':
             if not self.join : 
                 self.join = []
-                if self.inner_join_chains:
-                    for jchain in self.inner_join_chains:
-                        self.join.extend( build_joins_chain(  jchain ) )
-                if self.join_given:
-                    self.join.extend(self.join_given)
+            if self.inner_join_chains:
+                for jchain in self.inner_join_chains:
+                    self.join.extend( build_joins_chain(  jchain ) )
+            if self.join_append:
+                self.join.extend(self.join_append)
             return self.join
+
 
 
     def guarantee_table_in_query(self):
@@ -260,11 +320,11 @@ class DalView(Storage):
                     self.query = main_table
                     return self.query
 
-    def translate_expressions(self):
+    def translate_expressions(self):  # todo: maybe make singleton based on self.translation state
         if self.translator:
             # we  translate all needed stuff in one call, so the generated "left" would not have duplicates
-            t = self.translator.translate( [self.columns, self.query, self.having, self.orderby, self.groupby, self.distinct ] )
-            t.fields, t.query, t.having, t.orderby, t.groupby, t.distinct = t.pop('expr')
+            t = self.translation = self.translator.translate( [self.columns, self.query, self.having, self.orderby, self.groupby, self.distinct ] )
+            t.columns, t.query, t.having, t.orderby, t.groupby, t.distinct = t.pop('expr')
 
             if t.affected_fields:
                 return t # also includes left, and affected_fields
@@ -275,7 +335,7 @@ class DalView(Storage):
         self.guarantee_table_in_query()
         t = t or self.translate_expressions()
         if translate and t:
-            sql = self.db(t.query)._select( *t.fields, **self.kwargs_4select( translation=t ) )
+            sql = self.db(t.query)._select( *t.columns, **self.kwargs_4select( translation=t ) )
         else:
             sql = self.db(self.query)._select(*self.columns, **self.kwargs_4select())
 
@@ -287,18 +347,18 @@ class DalView(Storage):
         self.guarantee_table_in_query()
         t = self.translate_expressions()
         if translate and t:
-            # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.fields, **self.kwargs_4select( translation=t ))
+            # print "DBG Translated sql 2:  ", self.db(t.query)._select(*t.columns, **self.kwargs_4select( translation=t ))
             if getattr(current, 'DBG', False):
                 print "\nDBG Bare sql:\n",    self.get_sql(translate=False, t=t)
                 print "\nDBG Translated sql:\n", self.get_sql(translate=True, t=t)
 
             if log:        saved_debug, db._debug = db._debug, True
-            trows = self.db(t.query).select(*t.fields, **self.kwargs_4select( translation=t ))
+            trows = self.db(t.query).select(*t.columns, **self.kwargs_4select( translation=t ))
             if log:        db._debug = saved_debug
 
             # trows.compact = compact
             if translate == 'transparent':  # map fieldnames back to original (leave no COALESC... in Rows)
-                map_2original_names = {str(t):str(f)   for t, f in zip(t.fields, self.columns) if str(t)!=str(f) } # todo: maybe use trows.parse
+                map_2original_names = {str(t):str(f)   for t, f in zip(t.columns, self.columns) if str(t)!=str(f) } # todo: maybe use trows.parse
 
                 trows.compact = False
                 for row in trows:
