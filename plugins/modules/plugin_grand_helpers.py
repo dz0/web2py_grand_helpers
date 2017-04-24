@@ -146,9 +146,14 @@ from gluon.dal import DAL
 
 
 def tidy_SQL(sql, wrap_PRE=True):
-    for w in 'from left inner where'.upper().split():
+    for w in 'from left join inner where group limit COALESCE'.upper().split():
         sql = sql.replace(w, '\n' + w)
+
+    sql = sql.replace('LEFT \n\nJOIN', 'LEFT JOIN')
+    sql = sql.replace('LEFT \nJOIN', 'LEFT JOIN')
+
     sql = sql.replace('AND', '\n      AND')
+    sql = sql.replace('OR', '\n      OR')
 
     if wrap_PRE: sql = PRE(sql)
     else: sql = "\n %s \n" % sql

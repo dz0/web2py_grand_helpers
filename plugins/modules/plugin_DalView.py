@@ -1,6 +1,6 @@
 from gluon.storage import Storage
 from gluon import current
-from pydal.objects import Field, Row, Expression
+from pydal.objects import Field, Row, Expression, Table
 from gluon.html import PRE
 
 from plugin_grand_helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
@@ -125,13 +125,18 @@ class DalView(Storage):
                 #     extend_with_unique( kwargs.distinct, self.columns )
                 #     extend_with_unique( kwargs.orderby, kwargs.distinct)
 
-    def get_involved_tables(self, query, fields):
+    def get_tables_of_columns(self, query=None, columns=None):
+        query = query or self.query
+        columns = columns or self.columns
+
         db = current.db
+        # columns = db._adapter.expand_all(columns, [])  # expand .ALL -- done in init
+
         tables = db._adapter.tables # traverses expr and extracts tables
 
-        tablenames = tables(query)
+        tablenames = [] # tables(query)
         tablenames_for_common_filters = tablenames
-        for field in fields:
+        for field in columns:
             for tablename in tables(field):
                 if not tablename in tablenames:
                     tablenames.append(tablename)
@@ -140,13 +145,22 @@ class DalView(Storage):
 
 
     def smart_groupby_instead_of_distinct(self):
-        tables = self.get_involved_tables()
+        tables = self.get_tables_of_columns()
 
-        # translations_coalesce = self.translator.translate( self.columns )['expr']
+        # translated_columns = self.translator.translate( self.columns )['expr']
+        # translated_columns = self.translation.affected_fields
+        translated_columns = []
         if self.translation:
-            translations_coalesce = self.translation.columns
+            # translated_fields_str = map(str, self.translation.affected_fields)
+            for col in self.translation.columns:
+                # if str(col) in translated_fields_str:
+                if self.translator.is_translation( col ):
+                    translated_columns.append( col )
 
-        fields = [t.id for t in tables] + translations_coalesce
+
+        fields = [t.id for t in tables] + translated_columns
+
+        # print("dbg) tables, translated_columns: ", map(str, translated_columns))
         if len(fields) > 1:
             return reduce( lambda a, b: a|b, fields )
         else:
@@ -198,10 +212,11 @@ class DalView(Storage):
 
 
     def kwargs_4select(self, translation=None):
+        """
+        constructs dictionary to be used in "select(**kwargs)"
+        Takes initial values from self attributes, but doesn't override the attributes
+        """
         kwargs = Storage( {key:self[key] for key in SELECT_ARGS if self[key]} )
-
-        self.smart_orderby_prepend_distinct(kwargs)
-        # extra_groupby = self.smart_groupby_missing_for_aggregate(kwargs) # for postgress
 
         if translation:   # inject translated stuff
             if kwargs.get( 'left' ):
@@ -223,7 +238,12 @@ class DalView(Storage):
         # kwargs['groupby'] = kwargs['groupby'] | extra_groupby     if  kwargs['groupby']      else extra_groupby
 
         if self.distinct and self.smart_groupby:
-            kwargs['groupby'] = self.smart_groupby_instead_of_distinct()
+            kwargs['groupby'] = self.smart_groupby_instead_of_distinct()  # this should happen after translation
+            kwargs['distinct'] = None
+
+        if kwargs['distinct']:  # Note: not the same as self.distinct
+            self.smart_orderby_prepend_distinct(kwargs)
+            # extra_groupby = self.smart_groupby_missing_for_aggregate(kwargs) # for postgress
 
 
         if hasattr(current, 'dev_limitby'):
@@ -239,9 +259,17 @@ class DalView(Storage):
                          
         ps.:  "columns" can be items of Field | Expression | str .
         """
-        self.columns = columns
+
         self.db = current.db
         self.translation = None
+
+        self.columns = columns
+
+        for nr, col in enumerate(columns):
+            if isinstance(col, Table):
+                columns[nr] = col.ALL
+
+        self.columns = self.db._adapter.expand_all(  self.columns, [] ) # for db.table.ALL  / SQLALL
 
 
         for key in SELECT_ARGS+('query',

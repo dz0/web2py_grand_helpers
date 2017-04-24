@@ -1,6 +1,6 @@
 from plugin_GrandTranslator import *
 from plugin_DalView import DalView
-from plugin_grand_helpers import test_fields
+from plugin_grand_helpers import test_fields, tidy_SQL
 
 
 gt = GrandTranslator(
@@ -28,6 +28,7 @@ def populate_fake_translations():
         )
 
 
+
 def test_30_grandtranslator_expressions():
 
     tests = [
@@ -51,6 +52,23 @@ def test_30_grandtranslator_expressions():
     results =  [ {expr: repr_t( gt.translate( expr ))}  for expr in tests]
     return dict(tests=results)
 
+
+def test_30b_grandtranslator_expand_ALL():
+
+    tests = [ db.auth_user.ALL, db.auth_group.ALL  ]  # SQLALL
+
+    tests  =  db._adapter.expand_all( tests, [])
+
+    # def repr_t(t):  return map(str, [map(str, t.expr)]+t.left  )
+    #
+    # results =   {str(map(str,expr)): repr_t( gt.translate( expr ))}
+
+    def repr_t(t):  return map(str, [t.expr]+t.left  )
+
+    results =  [ {expr: repr_t( gt.translate( expr ))}  for expr in tests]
+
+    return dict(tests=results)
+
 def test_31_grandtranslator_dalview():
 
     expr = db.auth_user.first_name + db.auth_user.last_name
@@ -65,8 +83,8 @@ def test_31_grandtranslator_dalview():
     sql_translated = selection.get_sql()
 
     return dict(
-        sql=PRE(  sql  .replace("LEFT", "\nLEFT")),
-        sql_translated=PRE(sql_translated  .replace("LEFT", "\nLEFT").replace("COALESCE", "\nCOALESCE")),
+        sql=tidy_SQL(  sql ),
+        sql_translated=tidy_SQL(sql_translated ),
         data = selection.execute()
     )
 

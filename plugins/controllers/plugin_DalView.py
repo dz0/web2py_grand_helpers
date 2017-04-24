@@ -1,40 +1,30 @@
 from plugin_DalView import *
 from pydal.objects import Field #, Row, Expression
-from plugin_grand_helpers import save_DAL_log, test_fields
+from plugin_grand_helpers import save_DAL_log, test_fields, tidy_SQL, get_distinct
 
 from  plugin_joins_builder import build_joins_chain
 
 
 
+def test():
+    cols = [db.auth_user.id, db.auth_user.first_name, db.auth_user.email, db.auth_group.role]
+    selection = DalView(*cols,
+                        # query=filter.query, having=filter.having,
+                        left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
+                  )
+
+    sql = selection.get_sql()
+    print( "DBG SQL: ", sql )
+
+    # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
+    data = selection.execute()
+
+    return dict(
+            sql = sql,
+            data = data,
+            )
 
 
-
-def test_70_group_by_val():
-    rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
-                left=build_joins_chain( db.auth_user, db.auth_membership, db.auth_group )
-                )
-    key_field = db.auth_user.first_name
-    rows_grouped = rows.group_by_value( key_field )
-    # names = rows.column( key_field )
-
-    for name in rows_grouped:
-        rows_grouped[name] = [row['auth_group']['role'] for row in  rows_grouped[name] ]
-        # rows_grouped[name] = BEAUTIFY(  rows_grouped[name]  )
-    return CAT( SQLTABLE(rows), TABLE(map( TR, rows_grouped.items()) ), _border=2  )
-
-def test_70_common_filters():
-    db.auth_user._common_filter = lambda q: db.auth_user.id > 100
-    query= db.auth_user.email.contains('com')
-    return dict( query = db(query).query,
-                 sql = db(query)._select(db.auth_user.id, db.auth_user.email )
-                 )
-
-
-def test_80_postgre_distinct():
-    # sel = DalView(db.auth_user.first_name, distinct=True, translator=gt) # orderby=db.auth_user.first_name
-    sel = DalView(db.auth_user.first_name, distinct=True, translator=None) # orderby=db.auth_user.first_name
-    print sel.get_sql()
-    return CAT(sel.execute(), PRE(sel.get_sql()) )
 
 def test_00_dev_auth_has_permission():
     return dict(a=auth.has_permission('add', 'auth_user'))
@@ -245,23 +235,90 @@ def test_26b_select_with_virtuals_Aggregated_withTranslator():
 
     return test_26_select_with_virtuals_Aggregated()
 
-def test():
-    cols = [db.auth_user.id, db.auth_user.first_name, db.auth_user.email, db.auth_group.role]
-    selection = DalView(*cols,
-                        # query=filter.query, having=filter.having,
-                        left_join_chains=[[ db.auth_user, db.auth_membership, db.auth_group, db.auth_permission ]]
-                  )
 
-    sql = selection.get_sql()
-    print( "DBG SQL: ", sql )
+try:
+    from plugin_GrandTranslator import GrandTranslator
+    gt = GrandTranslator(
+        fields = [db.auth_user.first_name,   db.auth_group.role],   # we want to get tranlations only for first_name and role
+        language_id=2
+    )
+except Exception as e:
+    print('Err setting GrandTranslator in controllers/plugin_DalView ', e)
+    gt = None
 
-    # data = SQLFORM.grid(search.query, fields=selected_fields, **kwargs )  # can toggle
-    data = selection.execute()
+def test_70_group_by_val():
+    rows = db().select(db.auth_user.first_name, db.auth_group.ALL,
+                left=build_joins_chain( db.auth_user, db.auth_membership, db.auth_group )
+                )
+    key_field = db.auth_user.first_name
+    rows_grouped = rows.group_by_value( key_field )
+    # names = rows.column( key_field )
 
-    return dict(
-            sql = sql,
-            data = data,
-            )
+    for name in rows_grouped:
+        rows_grouped[name] = [row['auth_group']['role'] for row in  rows_grouped[name] ]
+        # rows_grouped[name] = BEAUTIFY(  rows_grouped[name]  )
+    return CAT( SQLTABLE(rows), TABLE(map( TR, rows_grouped.items()) ), _border=2  )
+
+def test_70_common_filters():
+    db.auth_user._common_filter = lambda q: db.auth_user.id > 100
+    query= db.auth_user.email.contains('com')
+    return dict( query = db(query).query,
+                 sql = tidy_SQL(  db(query)._select(db.auth_user.id, db.auth_user.email ) )
+                 )
+
+
+
+def test_80_postgre_distinct():
+    # sel = DalView(db.auth_user.first_name, distinct=True, translator=gt) # orderby=db.auth_user.first_name
+    sel = DalView(db.auth_user.ALL,
+                  distinct=get_distinct(db.auth_user.first_name),
+                  translator=gt) # orderby=db.auth_user.first_name
+    print sel.get_sql()
+    rows = sel.execute()
+    save_DAL_log()
+    return CAT(rows, tidy_SQL(sel.get_sql()) )
+
+
+
+def test_81_postgre_smart_groupby_instead_of_distinct():
+    # sel = DalView(db.auth_user.first_name, distinct=True, translator=gt) # orderby=db.auth_user.first_name
+    sel = DalView(db.auth_user.ALL, db.auth_group.ALL,
+                  distinct=True, smart_groupby=True,
+                  translator=gt,
+                  left = [ db.auth_membership.on( db.auth_user.id == db.auth_membership.user_id ),
+                           db.auth_group.on(db.auth_group.id == db.auth_membership.group_id)
+                           ]
+                  ) # orderby=db.auth_user.first_name
+
+    rows = sel.execute()
+    save_DAL_log()
+    return CAT(rows, tidy_SQL(sel.get_sql()) )
+
+
+    def test_translated_columns():
+        # print sel.get_sql()
+        # TEST translated Cols
+        sel.translate_expressions()
+
+        print "dbg, sel.translation.affected_fields", map(str, sel.translation.affected_fields)
+        translated_columns = []
+        if sel.translation:
+            for expr in sel.translation.columns:
+                if sel.translator.is_translation(expr):
+                    translated_columns.append(expr)
+
+        groupby = sel.smart_groupby_instead_of_distinct()
+
+        print("DBG translated_columns: ", map(str, translated_columns))
+        return dict(
+            # affected_fields=map(str, sel.translation.affected_fields) ,
+            translated_columns=map(str, translated_columns),
+            groupby=str(groupby),
+            # translation_columns = map(str, sel.translation.columns)
+        )
+
+    test_translated_columns()
+
 
 
 
@@ -275,3 +332,8 @@ def index():
 def dbg():
     from plugin_AnySQLFORM import dbg
     return dbg()
+
+
+
+
+

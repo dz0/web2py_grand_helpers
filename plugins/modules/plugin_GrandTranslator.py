@@ -65,11 +65,12 @@ class GrandTranslator():
         """
         return self.db.translation_field.with_alias( "T_"+field._tablename+"__"+field.name )
 
-    def translate_field(self, field):
+    def translate_field(self, field, update_context=True):
         if str(field) in map(str, self.fields):  # direct check probably uses __eq__ for objects and returns nonsense
             t_alias = self.translation_alias( field )
             if not str(field) in  map(str, self.affected_fields):
-                self.affected_fields.append(field)
+                if update_context:
+                    self.affected_fields.append(field)
             return  t_alias.value.coalesce( field )
             # return  self.adapter.COALESCE( t_alias.value , field)
         else:
@@ -91,11 +92,14 @@ class GrandTranslator():
 
     def is_translation(self, expr):
         '''see is_expression_translated'''
-        return (
-              hasattr(expr, 'op') and expr.op is expr.db._adapter.COALESCE
-              and isinstance(expr.second, Field)
-              and str(expr.first) in [self.translation_alias(expr.second) + '.value', 'translation_field.value']
-            )
+
+        if hasattr(expr, 'op') and expr.op == expr.db._adapter.COALESCE:
+            orig_field = expr.second[0] # if isinstance( expr.second, (list, tuple) ) else expr.second
+            mocked_translation = self.translate_field(orig_field, update_context=False)
+            return str(mocked_translation ) == str(expr)
+            # if isinstance(orig_field, Field) \
+            #   and str(expr.first) in [ '%s.value' % self.translation_alias(orig_field), 'translation_field.value']:
+            #     return True
 
     def is_expression_translated(self,expr):  # for more consice API
         return self.is_translation(expr)
