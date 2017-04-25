@@ -504,6 +504,7 @@ def test_63zz_good_goods_NG():
                              , dalview_append_join_chains=True
 
                              , dalview_smart_groupby=True
+                             , dalview_distinct=True
                             # , dalview_groupby=db.good.id | title_field
                             #                   | db.good_category.id | category_field |
                             #                   db.good_group.id | group_field |
@@ -742,21 +743,26 @@ def test_66b_aggregate_warehouse_batches_Grid():
         ,db.warehouse_batch.residual.sum()
 
         # , total_field_v # ordinary virtual
+
         , total_field_vagg # virtual aggregate
     ]
 
     if request.vars._66_inside_Register:
         return columns
 
+    # COALESCE = db._adapter.COALESCE
+
     rows = select_with_virtuals(
         *columns
         , translator = gt
         , left = [ db.warehouse_batch.on(db.warehouse_batch.good_id==db.good.id) ]
-        # , left = build_joins_chain(db.good, db.warehouse_batch)
-        # , groupby =  db.warehouse_batch.good_id #  should be figured out automatically
-        # , distinct = db.good.id
-        # , orderby = db.good.id|db.good.sku
-        , limitby = (0,10)
+        , distinct = True
+        , smart_groupby = True# "translations" # True would include db.warehouse_batch.ID (not good_id)
+
+    , groupby =  db.warehouse_batch.good_id # good_id is needed by  total_field_vagg (VirtualField for aggregation)
+
+
+    # , limitby = (0,10)
     )
 
     if hasattr(current, 'DBG') and current.DBG:
@@ -767,7 +773,7 @@ def test_66b_aggregate_warehouse_batches_Grid():
 
     # return dict(rows=rows)
 
-    return DIV( rows, PRE(rows.sql_log) )
+    return DIV( rows, PRE(getattr(rows, 'sql_log', '')) )
 
 def test_66c_aggregate_warehouse_batches_Register():
     request.vars._66_inside_Register = True
@@ -785,7 +791,7 @@ def test_66c_aggregate_warehouse_batches_Register():
 
                              #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
                              , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
-
+                             , dalview_smart_groupby=True
                              # filters=filters  # fast filters
                              # ,
                              # , translator=gt   # GrandTranslator( fields = [db.good.title], language_id=2 )

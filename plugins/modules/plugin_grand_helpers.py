@@ -63,15 +63,23 @@ def append_unique(A, b):
 
 
 def is_aggregate( expr ):
+
+    if  hasattr(expr, 'op'):
+        db = current.db  # target expression might be str type
+        return expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]
+                    # [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
+
     if isinstance(expr, str):
-        return # TODO : regexp to see if it has SUM AVERAGE COUNT...
+        first = expr.split("(")[0]
+        first_word = first.upper().strip()
+        agg_fnames = """SUM AVG MIN MAX COUNT FIRST LAST
+        mode rank
+        array_agg json_agg string_agg xmlagg json_object_agg
+        """.upper().split() # https://www.postgresql.org/docs/9.5/static/functions-aggregate.html
+        # maybe include ROUND ? when used with SUM/AVG
+        return first_word in agg_fnames # TODO TEST: maybe regexp
 
-    if not hasattr(expr, 'op'):
-        return
 
-    db = getattr(expr, 'db', current.db)  # target expression might be str type
-    return expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]
-                # [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
 
 def is_reference(field):
     try:
@@ -138,9 +146,29 @@ def force_refs_represent_ordinary_int(rows):
             #     if isinstance( val, Reference):
             #         db[table][f].represent = None
 
+from pydal.objects import Expression, Query
+from gluon.storage import Storage
+### when debugging
+def repr_data_Expression_Query_as_str(stuff):
+    """traverses data structure and applies str to Expression and Query"""
+    # try:
+        # print "DBG expanded: ", stuff
+        # if isinstance(stuff, Storage):
 
+    if isinstance(stuff, dict):
+        return {key:repr_data_Expression_Query_as_str(val) for key, val in stuff.items()}
+    elif isinstance(stuff, (tuple, list, set)):
+        return  [repr_data_Expression_Query_as_str(item) for item in stuff]
+    elif isinstance(stuff, (Expression, Query)):
+        return str(stuff)  # db._adapter.expand( stuff )
+    else:
+        return stuff
+    # except:
+    #     return stuff
+    # except Exception as e:
+    #     return "%r (%s)" % (stuff, e)
 
-
+################ SQL LOG -- DALVIEW mostly #########
 from gluon.html import XML, TABLE, TR, PRE, BEAUTIFY, STYLE, CAT, DIV, B
 from gluon.dal import DAL
 
@@ -168,6 +196,7 @@ def sql_log_find_last_pos( item ):  # to find item from end (if it was not trimm
             return nr
 
     return -1
+
 
 def get_sql_log(start=0, end=None):
     # sqls = None

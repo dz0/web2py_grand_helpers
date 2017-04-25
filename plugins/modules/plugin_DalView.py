@@ -3,7 +3,7 @@ from gluon import current
 from pydal.objects import Field, Row, Expression, Table
 from gluon.html import PRE
 
-from plugin_grand_helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference
+from plugin_grand_helpers import extend_with_unique, append_unique, get_fields_from_table_format, is_reference, repr_data_Expression_Query_as_str
 from plugin_grand_helpers import tidy_SQL, sql_log_format, get_sql_log, save_DAL_log, sql_log_find_last_pos, set_TIMINGSSIZE
 from plugin_grand_helpers import append_unique, is_aggregate
 
@@ -125,90 +125,64 @@ class DalView(Storage):
                 #     extend_with_unique( kwargs.distinct, self.columns )
                 #     extend_with_unique( kwargs.orderby, kwargs.distinct)
 
-    def get_tables_of_columns(self, query=None, columns=None):
-        query = query or self.query
-        columns = columns or self.columns
-
+    def get_tables_of_expressions(self, expressions):
         db = current.db
-        # columns = db._adapter.expand_all(columns, [])  # expand .ALL -- done in init
-
         tables = db._adapter.tables # traverses expr and extracts tables
 
-        tablenames = [] # tables(query)
-        tablenames_for_common_filters = tablenames
-        for field in columns:
-            for tablename in tables(field):
+        tablenames = []
+        for expr in expressions:
+            for tablename in tables(expr):
                 if not tablename in tablenames:
                     tablenames.append(tablename)
 
         return [db[tname] for tname in tablenames]
 
 
+    def filter_out_translated_columns(self, fields=None):
+        if self.translator and self.translation:
+            fields = None or self.translation.columns or []
+            translated_fields = []
+            if self.translation:
+                # translated_fields_str = map(str, self.translation.affected_fields)
+                for col in fields:
+                    # if str(col) in translated_fields_str:
+                    if self.translator.is_translation(col):
+                        translated_fields.append(col)
+            return translated_fields
+
+
     def smart_groupby_instead_of_distinct(self):
-        tables = self.get_tables_of_columns()
+        """distinct gets wrong numbers for Window functions (COUNT OVER(*))
+        so we construct needed groupby:
+        :param smart_groupby can be True or combination of "tables" "translations"
+        """
 
-        # translated_columns = self.translator.translate( self.columns )['expr']
-        # translated_columns = self.translation.affected_fields
-        translated_columns = []
-        if self.translation:
-            # translated_fields_str = map(str, self.translation.affected_fields)
-            for col in self.translation.columns:
-                # if str(col) in translated_fields_str:
-                if self.translator.is_translation( col ):
-                    translated_columns.append( col )
+        #  collect tables, involved in expressions, except the ones whose fields are aggregated
+        cols_agregates = [ col for col in self.columns if is_aggregate(col) ]
+        tables_with_agregates = self.get_tables_of_expressions ( cols_agregates )
+        tables_all = self.get_tables_of_expressions ( self.columns )
+        tables_without_agregates = [t for t in tables_all     if  t not in tables_with_agregates]
+                                    # filter( lambda t: t not in tables_with_agregates, tables_all )
+        tables_ids = [t.id for t in tables_without_agregates ]
 
 
-        fields = [t.id for t in tables] + translated_columns
+        translations = self.filter_out_translated_columns() or [] # COALESCEs
+
+        # fields = tables_ids + translated_cols
+        fields = []
+        if self.smart_groupby is True:
+            self.smart_groupby = "tables translations"
+
+        if 'tables' in self.smart_groupby:
+            fields += tables_ids
+        if 'translations' in self.smart_groupby:
+            fields += translations
 
         # print("dbg) tables, translated_columns: ", map(str, translated_columns))
         if len(fields) > 1:
             return reduce( lambda a, b: a|b, fields )
         else:
             return fields[0]
-
-    def smart_groupby_missing_for_aggregate__WRONG__needs_coalesces__see_instead_of_distinct(self, kwargs, extra_aggregates=[]):
-        """for Postgre - when selecting aggregates, other fields must be grouped
-
-        extra_aggregates should be used in case we have aggregate expressions as strings
-        """
-
-        aggregate_fields = list( filter( is_aggregate, self.columns ) ) + extra_aggregates
-
-        if not aggregate_fields: return
-
-        def fields_list_from_expr(groupby_expr):
-            result = []
-            def _traverse(expr):
-                if not expr: return
-
-                if isinstance(expr, Field):
-                    result.append( expr )
-                else:
-                    _traverse(expr.first)
-                    _traverse(expr.second)
-
-            _traverse(groupby_expr)
-
-            return result
-
-        groupby_fields = fields_list_from_expr( kwargs.get('groupby'))
-        missing_groupby_fields = []
-
-        for f in self.columns:
-
-            # skip or warn for Window functions
-            if isinstance(f, str):
-                print "Warning:  %r in missing_groupby_on_aggregate is string.   If needed it should be listed in groupby manually" % f
-                continue
-
-            if not str(f) in map(str, aggregate_fields+groupby_fields):  # todo maybe optimize str mapping
-                append_unique(missing_groupby_fields, f)
-
-        if missing_groupby_fields:
-            # print "dbg missing_groupby_fields", missing_groupby_fields
-            # kwargs['groupby']  = reduce( lambda a, b: a|b, groupby_fields )
-            return reduce( lambda a, b: a|b, missing_groupby_fields )
-
 
 
     def kwargs_4select(self, translation=None):
@@ -219,6 +193,12 @@ class DalView(Storage):
         kwargs = Storage( {key:self[key] for key in SELECT_ARGS if self[key]} )
 
         if translation:   # inject translated stuff
+            for key in SELECT_ARGS:
+                if key == 'left': continue # applied/appended below
+                if key in translation:
+                    kwargs[key] = translation[key]
+
+
             if kwargs.get( 'left' ):
                 kwargs[ 'left' ] = kwargs['left'][:] # clone, to prevent influencing of passed list
                 extend_with_unique( kwargs['left'], translation[ 'left' ])  # todo: might need optimisation
@@ -226,31 +206,35 @@ class DalView(Storage):
             else:
                 kwargs[ 'left' ] =  translation[ 'left' ]
 
-            # if extra_groupby:
-            #     t2 = self.translator.translate(extra_groupby)
-            #     if t2:  extra_groupby = t2.expr
-
-            for key in SELECT_ARGS:
-                if key == 'left': continue # we already applied this
-                if key in translation:
-                    kwargs[key] = translation[key]
-
-        # kwargs['groupby'] = kwargs['groupby'] | extra_groupby     if  kwargs['groupby']      else extra_groupby
 
         if self.distinct and self.smart_groupby:
-            kwargs['groupby'] = self.smart_groupby_instead_of_distinct()  # this should happen after translation
-            kwargs['distinct'] = None
+            kwargs['distinct'] = None # disable
+
+            if self.distinct == True:
+                new = self.smart_groupby_instead_of_distinct()  # this should happen after translation
+            else:
+                new = self.distinct # should be    field1 | field2 | ..
+
+            if kwargs['groupby']:
+                kwargs['groupby'] |= new
+            else:
+                kwargs['groupby'] = new
 
         if kwargs['distinct']:  # Note: not the same as self.distinct
             self.smart_orderby_prepend_distinct(kwargs)
-            # extra_groupby = self.smart_groupby_missing_for_aggregate(kwargs) # for postgress
-
 
         if hasattr(current, 'dev_limitby'):
             kwargs['limitby'] = kwargs['limitby'] or current.dev_limitby  # from models/dev.py
             kwargs['orderby_on_limitby'] = False
 
+        if getattr(current, "DBG", None):
+            print "DBG_DalView_kwargs_4select:", repr_data_Expression_Query_as_str(kwargs)
+            current.session.DBG_DalView_kwargs_4select__LAST = repr_data_Expression_Query_as_str(kwargs) # FIXME: doesn't save on crash..,ex, ProgrammingError: for SELECT DISTINCT, ORDER BY expressions must appear in select list
+
         return kwargs
+
+
+
 
     def __init__(self, *columns, **kwargs):
         """
