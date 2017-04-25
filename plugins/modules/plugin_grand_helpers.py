@@ -63,21 +63,25 @@ def append_unique(A, b):
 
 
 def is_aggregate( expr ):
+    """ checks if expr is aggregate
+    be carefull, as also recognizes (some) Window functions as aggregates (example COUNT OVER)
+    """
+
+    db = current.db  # target expression might be str type
 
     if  hasattr(expr, 'op'):
-        db = current.db  # target expression might be str type
-        return expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]
-                    # [db._adapter.dialect.AGGREGATE, db._adapter.dialect.COUNT]:  # for newer pydal... untested
+        if expr.op in [db._adapter.AGGREGATE, db._adapter.COUNT]:
+            return True
 
-    if isinstance(expr, str):
-        first = expr.split("(")[0]
-        first_word = first.upper().strip()
-        agg_fnames = """SUM AVG MIN MAX COUNT FIRST LAST
-        mode rank
-        array_agg json_agg string_agg xmlagg json_object_agg
-        """.upper().split() # https://www.postgresql.org/docs/9.5/static/functions-aggregate.html
-        # maybe include ROUND ? when used with SUM/AVG
-        return first_word in agg_fnames # TODO TEST: maybe regexp
+    # what if expr was set as string 'bla bla' # its
+    first = str(expr).split("(")[0]
+    first_word = first.upper().strip()
+    agg_fnames = """SUM AVG MIN MAX COUNT FIRST LAST
+    mode rank
+    array_agg json_agg string_agg xmlagg json_object_agg
+    """.upper().split() # https://www.postgresql.org/docs/9.5/static/functions-aggregate.html
+    # maybe include ROUND ? when used with SUM/AVG
+    return first_word in agg_fnames # TODO TEST: maybe regexp
 
 
 

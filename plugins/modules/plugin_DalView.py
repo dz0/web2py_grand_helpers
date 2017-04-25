@@ -140,7 +140,7 @@ class DalView(Storage):
 
     def filter_out_translated_columns(self, fields=None):
         if self.translator and self.translation:
-            fields = None or self.translation.columns or []
+            fields = fields or self.translation.columns or []
             translated_fields = []
             if self.translation:
                 # translated_fields_str = map(str, self.translation.affected_fields)
@@ -151,32 +151,42 @@ class DalView(Storage):
             return translated_fields
 
 
-    def smart_groupby_instead_of_distinct(self):
+    def smart_groupby_instead_of_distinct(self, just_repeat_nonagregates=True):
         """distinct gets wrong numbers for Window functions (COUNT OVER(*))
         so we construct needed groupby:
-        :param smart_groupby can be True or combination of "tables" "translations"
+        :param smart_groupby_4distinct can be True or combination of "tables" "translations"
         """
 
-        #  collect tables, involved in expressions, except the ones whose fields are aggregated
-        cols_agregates = [ col for col in self.columns if is_aggregate(col) ]
-        tables_with_agregates = self.get_tables_of_expressions ( cols_agregates )
-        tables_all = self.get_tables_of_expressions ( self.columns )
-        tables_without_agregates = [t for t in tables_all     if  t not in tables_with_agregates]
-                                    # filter( lambda t: t not in tables_with_agregates, tables_all )
-        tables_ids = [t.id for t in tables_without_agregates ]
+        columns = self.translation.columns if (self.translator and self.translation) else self.columns
+        print "DBG DalView columns:", map(str, columns)
+
+        if just_repeat_nonagregates:
+            # TOTAL_ROWS is also recognized as aggregate
+            fields = cols_nonagregates = [col for col in  columns if not is_aggregate(col)]
 
 
-        translations = self.filter_out_translated_columns() or [] # COALESCEs
+        else:
+            #  collect tables, involved in expressions, except the ones whose fields are aggregated
+            cols_agregates = [ col for col in self.columns if is_aggregate(col) ]
 
-        # fields = tables_ids + translated_cols
-        fields = []
-        if self.smart_groupby is True:
-            self.smart_groupby = "tables translations"
+            tables_with_agregates = self.get_tables_of_expressions ( cols_agregates )
+            tables_all = self.get_tables_of_expressions ( self.columns )
+            tables_without_agregates = [t for t in tables_all     if  t not in tables_with_agregates]
+                                        # filter( lambda t: t not in tables_with_agregates, tables_all )
+            tables_ids = [t.id for t in tables_without_agregates ]
 
-        if 'tables' in self.smart_groupby:
-            fields += tables_ids
-        if 'translations' in self.smart_groupby:
-            fields += translations
+
+            translations = self.filter_out_translated_columns() or [] # COALESCEs
+
+            # fields = tables_ids + translated_cols
+            fields = []
+            if self.smart_groupby_4distinct is True:
+                self.smart_groupby_4distinct = "tables translations"
+
+            if 'tables' in self.smart_groupby_4distinct:
+                fields += tables_ids
+            if 'translations' in self.smart_groupby_4distinct:
+                fields += translations
 
         # print("dbg) tables, translated_columns: ", map(str, translated_columns))
         if len(fields) > 1:
@@ -207,13 +217,15 @@ class DalView(Storage):
                 kwargs[ 'left' ] =  translation[ 'left' ]
 
 
-        if self.distinct and self.smart_groupby:
-            kwargs['distinct'] = None # disable
+        if self.smart_groupby_4distinct:
+            # self.distinct = self.distinct or True # set default True
+            kwargs['distinct'] = None # disable in real selection
 
-            if self.distinct == True:
-                new = self.smart_groupby_instead_of_distinct()  # this should happen after translation
+            if isinstance(self.distinct , Expression) :
+                new = self.distinct  # should be    field1 | field2 | ..
             else:
-                new = self.distinct # should be    field1 | field2 | ..
+                new = self.smart_groupby_instead_of_distinct()  # this should happen after translation
+
 
             if kwargs['groupby']:
                 kwargs['groupby'] |= new
@@ -228,6 +240,8 @@ class DalView(Storage):
             kwargs['orderby_on_limitby'] = False
 
         if getattr(current, "DBG", None):
+            # print "DBG_DalView_kwargs_4select:", kwargs
+            print "DBG_DalView_kwargs_4select groupby:",  kwargs['groupby']
             print "DBG_DalView_kwargs_4select:", repr_data_Expression_Query_as_str(kwargs)
             current.session.DBG_DalView_kwargs_4select__LAST = repr_data_Expression_Query_as_str(kwargs) # FIXME: doesn't save on crash..,ex, ProgrammingError: for SELECT DISTINCT, ORDER BY expressions must appear in select list
 
@@ -257,7 +271,7 @@ class DalView(Storage):
 
 
         for key in SELECT_ARGS+('query',
-                                'smart_groupby',
+                                'smart_groupby_4distinct',
                                 'left_join_chain', 'inner_join_chain',
                                 'left_join_chains', 'inner_join_chains',
                                 'left_append', 'join_append',  # would be appended after join_chains # TODO maybe deprecate

@@ -503,7 +503,7 @@ def test_63zz_good_goods_NG():
                              ,dalview_left_join_chain = [db.good_group, db.good_collection_group]
                              , dalview_append_join_chains=True
 
-                             , dalview_smart_groupby=True
+                             , dalview_smart_groupby_4distinct=True
                              , dalview_distinct=True
                             # , dalview_groupby=db.good.id | title_field
                             #                   | db.good_category.id | category_field |
@@ -733,8 +733,8 @@ def test_66b_aggregate_warehouse_batches_Grid():
 
     columns = [
         # db.good.id,
-        represent_PK( db.good.id ) # virtual Expression
-        , db.good.title
+        represent_PK( db.good.id ), # virtual Expression
+        db.good.title
         # , db.warehouse_batch.id  # for dbg purposes
         #
         ,db.warehouse_batch.received.sum()
@@ -756,10 +756,10 @@ def test_66b_aggregate_warehouse_batches_Grid():
         *columns
         , translator = gt
         , left = [ db.warehouse_batch.on(db.warehouse_batch.good_id==db.good.id) ]
-        , distinct = True
-        , smart_groupby = True# "translations" # True would include db.warehouse_batch.ID (not good_id)
+        # , distinct = True
+        , smart_groupby_4distinct = True# "translations" # True would include db.warehouse_batch.ID (not good_id)
 
-    , groupby =  db.warehouse_batch.good_id # good_id is needed by  total_field_vagg (VirtualField for aggregation)
+    # , groupby =  db.warehouse_batch.good_id # good_id is needed by  total_field_vagg (VirtualField for aggregation)
 
 
     # , limitby = (0,10)
@@ -780,7 +780,7 @@ def test_66c_aggregate_warehouse_batches_Register():
     cols = test_66b_aggregate_warehouse_batches_Grid()
     search_fields = test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget()
 
-    register = GrandRegister(cols,
+    register = GrandRegister( cols,
 
                              columns_force_FK_table_represent=True,
                              cid='batches',
@@ -791,7 +791,9 @@ def test_66c_aggregate_warehouse_batches_Register():
 
                              #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
                              , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
-                             , dalview_smart_groupby=True
+                             , dalview_smart_groupby_4distinct=True
+                             , dalview_translator = gt
+
                              # filters=filters  # fast filters
                              # ,
                              # , translator=gt   # GrandTranslator( fields = [db.good.title], language_id=2 )

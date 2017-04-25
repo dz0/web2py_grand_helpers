@@ -97,7 +97,9 @@ class GrandRegister( object ):
                     # left_join_chains=None,  # probably would be enough (or [[]])
                     dalview_left_join_chains = None,
                     dalview_left=None,
-                    dalview_smart_groupby=None,
+                    dalview_groupby=None,
+                    # dalview_distinct=None,  # not used by GrandERP as TOTAL="COUNT OVER(*)" is not "noticed" by it
+                    dalview_smart_groupby_4distinct=None,
 
                  # SEARCH
                     # search_fields = None,
