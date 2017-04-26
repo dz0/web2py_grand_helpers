@@ -336,6 +336,12 @@ class GrandRegister( object ):
 
                 for sorter in self.w2ui.sort:
                     sorter.setdefault('direction', "asc")
+                    print "DBG sorter field", sorter['field']
+                    if isinstance( sorter['field'], ( Expression,  Field.Virtual )  ):
+                        sorter['field'] = FormField.construct_new_name( sorter['field'] )
+                    # if isinstance( sorter['field'], Field.Virtual ):
+                    #     raise RuntimeError( "Not implemented: " )
+
 
                 del self.w2ui.columns[-1]  # remove TOTAL_ROWS from end...
 

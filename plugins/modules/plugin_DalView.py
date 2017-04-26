@@ -275,27 +275,37 @@ class DalView(Storage):
                                 'smart_groupby_4distinct',
                                 'left_join_chain', 'inner_join_chain',
                                 'left_join_chains', 'inner_join_chains',
-                                'left_append', 'join_append',  # would be appended after join_chains # TODO maybe deprecate
-                                'append_join_chains', # doesn't check duplication over ordinary left/join
+                                'left_append', 'join_append',  # would be appended after join_chains # -- used by Virtual fields required join
+                                # 'append_join_chains', # doesn't check duplication over ordinary left/join
+                                'ignore_left_append', # ignores left_append  (which might come from virtual fields) # todo maybe (or join_append)
                                 'translator'):
             self[key] = kwargs.pop(key, None)
 
         def some_caution():
-            assert not( self.left_join_chain and self.left_join_chains )
-            assert not( self.inner_join_chain and self.inner_join_chains )
+
+            from plugin_grand_helpers import represent_joins
 
             # later we manipulate variable name with plural ...join_chainS, but when giving args, singular is most often used
+            assert not( self.left_join_chain and self.left_join_chains), "Overlapping singular and plural %r %r" % (self.left_join_chain, self.left_join_chains )
+            assert not( self.inner_join_chain and self.inner_join_chains), "Overlapping singular and plural %r %r" % (self.inner_join_chain, self.inner_join_chains )
+
             if self.left_join_chain: self.left_join_chains = [ self.left_join_chain ]
             if self.inner_join_chain: self.inner_join_chains = [ self.inner_join_chain ]
 
-            if not self.append_join_chains:
-                # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
-                from plugin_grand_helpers import  represent_joins
-                if self.left and self.left_join_chains :
-                    raise RuntimeError("Overlapping args for left...join_chains: \n left: %r\n left_join_chains: %r" % (represent_joins( self.left ), self.left_join_chains))
 
-                if self.join and self.inner_join_chains :
-                    raise RuntimeError("Overlapping args for inner...join_chains\n join: %r\n inner_join_chains: %r" % (represent_joins(self.join), self.inner_join_chains))
+
+            # ignore_left_append
+            if self.ignore_left_append and self.left_append:
+                print "Warning -- forgeting left_append", represent_joins( self.left_append )
+
+            # if not self.append_join_chains:
+            #     # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
+            #
+            #     if self.left and self.inner_join_chains :
+            #         raise RuntimeError("Overlapping args for left...join_chains: \n left: %r\n left_join_chains: %r" % (represent_joins( self.left ), self.left_join_chains))
+            #
+            #     if self.join and self.inner_join_chains :
+            #         raise RuntimeError("Overlapping args for inner...join_chains\n join: %r\n inner_join_chains: %r" % (represent_joins(self.join), self.inner_join_chains))
 
         some_caution()
 
@@ -328,7 +338,7 @@ class DalView(Storage):
                 self.join = []
             if self.inner_join_chains:
                 for jchain in self.inner_join_chains:
-                    self.join.extend( build_joins_chain(  jchain ) )
+                    self.join.extend( build_joins_chain(  *jchain ) )
             if self.join_append:
                 self.join.extend(self.join_append)
             return self.join
@@ -626,9 +636,9 @@ def select_with_virtuals(*columns,  **kwargs):
     ################################################################
     ####  do SELECT  -- get data rows
     ################################################################
-    selection_way = 'DalView'  # or 'dbset.select'
+    selection_way = 'DalView'  # or 'dbset.select' -- if one does'nt want use DalView
     if selection_way == 'DalView':
-        if joins:  # now joins always are left   TODO: make INNER possible..
+        if joins:  # now joins always are left   TODO: maybe make INNER possible..
             kwargs['left_append'] = joins
         translator= kwargs.pop('translator', None)  # TODO -- USE default translator
 
@@ -636,7 +646,7 @@ def select_with_virtuals(*columns,  **kwargs):
         rows = selection.execute()
 
     if selection_way == 'dbset.select':
-        if joins:  # now joins always are left   TODO: make INNER possible..
+        if joins:  # now joins always are left   TODO: maybe make INNER possible..
             kwargs['left'] = kwargs.get('left') or []
             kwargs['left'].extend(  joins )
         rows = dbset().select(*(selectable+nonshown), **kwargs)  # standart select

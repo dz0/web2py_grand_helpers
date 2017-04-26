@@ -804,14 +804,16 @@ def test_66c_aggregate_warehouse_batches_Register():
                              # grid_data_name='batches',
                              search_fields=search_fields
 
-                             , w2ui_sort =  [ {'field': residuals_sum_w2ui_name, 'direction': "desc"} ]
+                             , w2ui_sort =  [ {'field': db.warehouse_batch.residual.sum(), 'direction': "desc"} ]
+                             # , w2ui_sort =  [ {'field': residuals_sum_w2ui_name, 'direction': "desc"} ]
                              # , dalview_left_join_chain=[db.good, db.warehouse_batch]
-                             , dalview_left_join_chain=[db.good, db.warehouse_batch]
+                             , dalview_inner_join_chain=[db.good, db.warehouse_batch]
                              # , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
                              # , dalview_left= build_joins_chain( db.warehouse_batch, db.good )
-                             , dalview_append_join_chains=True
+                             # , dalview_append_join_chains=True # deprecated
+                             # , dalview_ignore_left_append = True
                              , dalview_smart_groupby_4distinct=True
-                             , dalview_translator = gt
+                             # , dalview_translator = gt
 
                              # filters=filters  # fast filters
                              # ,
