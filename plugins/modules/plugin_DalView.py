@@ -241,8 +241,9 @@ class DalView(Storage):
 
         if getattr(current, "DBG", None):
             # print "DBG_DalView_kwargs_4select:", kwargs
-            print "DBG_DalView_kwargs_4select groupby:",  kwargs['groupby']
-            print "DBG_DalView_kwargs_4select:", repr_data_Expression_Query_as_str(kwargs)
+            # print "DBG_DalView_kwargs_4select groupby:",  kwargs['groupby']
+            for key, val in kwargs.items():
+                print "DBG_DalView_kwargs_4select %s:" % key, repr_data_Expression_Query_as_str(val)
             current.session.DBG_DalView_kwargs_4select__LAST = repr_data_Expression_Query_as_str(kwargs) # FIXME: doesn't save on crash..,ex, ProgrammingError: for SELECT DISTINCT, ORDER BY expressions must appear in select list
 
         return kwargs
@@ -559,7 +560,6 @@ def select_with_virtuals(*columns,  **kwargs):
         # save_DAL_log(flush=True) # might be:
 
     sql_log = get_sql_log()
-    sql_log_start = len( sql_log )
     sql_log_marker_item = sql_log[-1]
 
     delete_nonshown = kwargs.pop('delete_nonshown', True)
@@ -602,7 +602,11 @@ def select_with_virtuals(*columns,  **kwargs):
                 required_joins = getattr(col, 'required_joins', [])
                 if required_joins:
                     # todo: maybe extend_with_unique: pseudocode: if diff(_tables(required_joins) , joined_tables): joins.extend( set_diff)
-                    joins.extend(  required_joins )
+                    for join in required_joins:
+                        if str(join) not in map(str, joins):
+                            joins.append(  join )
+                    # joins.extend(  required_joins )
+
         else:
             selectable.append( col )
 
@@ -622,21 +626,26 @@ def select_with_virtuals(*columns,  **kwargs):
     ################################################################
     ####  do SELECT  -- get data rows
     ################################################################
-    if joins:  # now joins always are left   TODO: make INNER possible..
-        if not kwargs.get('left'):
-            kwargs['left'] = []
-            kwargs['left'].extend(  joins )
+    selection_way = 'DalView'  # or 'dbset.select'
+    if selection_way == 'DalView':
+        if joins:  # now joins always are left   TODO: make INNER possible..
+            kwargs['left_append'] = joins
+        translator= kwargs.pop('translator', None)  # TODO -- USE default translator
 
-    translator= kwargs.pop('translator', None)  # TODO -- USE default translator
-    selection = DalView( *(selectable+nonshown), translator=translator, query=query,  **kwargs )
-    rows = selection.execute()
+        selection = DalView( *(selectable+nonshown), translator=translator, query=query,  **kwargs )
+        rows = selection.execute()
+
+    if selection_way == 'dbset.select':
+        if joins:  # now joins always are left   TODO: make INNER possible..
+            kwargs['left'] = kwargs.get('left') or []
+            kwargs['left'].extend(  joins )
+        rows = dbset().select(*(selectable+nonshown), **kwargs)  # standart select
 
     if getattr(current, 'DBG', None):
         rows.sql = selection.get_sql()
         rows.sql_nontranslated = selection.get_sql(translate=False)
         rows.sql_log = [ rows.sql ]
         rows.sql_nontranslated_log = [ rows.sql_nontranslated ]
-    # rows = dbset().select(*(selectable+nonshown), **kwargs)  # standart select
 
 
     # remap to resulting fields

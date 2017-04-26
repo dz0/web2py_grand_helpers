@@ -731,20 +731,30 @@ def test_66b_aggregate_warehouse_batches_Grid():
         # , limitby=(0,2)
     )
 
+    received_field = db.warehouse_batch.received.sum()
+    reserved_field = db.warehouse_batch.reserved.sum()
+    used_field = db.warehouse_batch.used.sum()
+    residual_field = db.warehouse_batch.residual.sum()
+    for expr in [received_field, reserved_field, used_field  ,residual_field]:
+        expr.w2ui = dict(caption=expr.first.label )
+
     columns = [
         # db.good.id,
         represent_PK( db.good.id ), # virtual Expression
         db.good.title
         # , db.warehouse_batch.id  # for dbg purposes
         #
-        ,db.warehouse_batch.received.sum()
-        ,db.warehouse_batch.reserved.sum()
-        ,db.warehouse_batch.used.sum()
-        ,db.warehouse_batch.residual.sum()
-
+        ,received_field
+        ,reserved_field
+        ,used_field
+        ,residual_field
+        # , db.warehouse_batch.good_id
         # , total_field_v # ordinary virtual
-
         , total_field_vagg # virtual aggregate
+
+        # , db.good.group_id
+        # , db.good.category_id
+        # , db.warehouse_batch.supplier_id
     ]
 
     if request.vars._66_inside_Register:
@@ -779,18 +789,27 @@ def test_66c_aggregate_warehouse_batches_Register():
     request.vars._66_inside_Register = True
     cols = test_66b_aggregate_warehouse_batches_Grid()
     search_fields = test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget()
+    # good warehouse_batch
+    # warehouse_ids =allowed_warehouse_ids(..)  # warehouse branch_staff branch branch_warehouse
+    residuals_sum_w2ui_name = FormField.construct_new_name(db.warehouse_batch.residual.sum())
+
+    db.warehouse_batch._common_filter  = lambda q:  db.warehouse_batch.good_id > 0
 
     register = GrandRegister( cols,
 
                              columns_force_FK_table_represent=True,
                              cid='batches',
                              # maintable_name='batches',
-                             # maintable_name='warehouse_batch',
-                             grid_data_name='batches',
+                             # maintable_name='good',
+                             # grid_data_name='batches',
                              search_fields=search_fields
 
-                             #, w2ui_sort =  [ {'field': "sku", 'direction': "asc"} ]
-                             , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
+                             , w2ui_sort =  [ {'field': residuals_sum_w2ui_name, 'direction': "desc"} ]
+                             # , dalview_left_join_chain=[db.good, db.warehouse_batch]
+                             , dalview_left_join_chain=[db.good, db.warehouse_batch]
+                             # , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
+                             # , dalview_left= build_joins_chain( db.warehouse_batch, db.good )
+                             , dalview_append_join_chains=True
                              , dalview_smart_groupby_4distinct=True
                              , dalview_translator = gt
 

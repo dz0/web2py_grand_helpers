@@ -94,8 +94,9 @@ class GrandRegister( object ):
 
                  # DALVIEW
                     dalview_translator = None,  # TODO
-                    # left_join_chains=None,  # probably would be enough (or [[]])
+                    dalview_left_join_chain=None, # singular is more common
                     dalview_left_join_chains = None,
+                    dalview_append_join_chains=None,
                     dalview_left=None,
                     dalview_groupby=None,
                     # dalview_distinct=None,  # not used by GrandERP as TOTAL="COUNT OVER(*)" is not "noticed" by it
