@@ -336,7 +336,7 @@ class GrandRegister( object ):
 
                 for sorter in self.w2ui.sort:
                     sorter.setdefault('direction', "asc")
-                    print "DBG sorter field", sorter['field']
+                    # print "DBG sorter field", sorter['field']
                     if isinstance( sorter['field'], ( Expression,  Field.Virtual )  ):
                         sorter['field'] = FormField.construct_new_name( sorter['field'] )
                     # if isinstance( sorter['field'], Field.Virtual ):
@@ -392,28 +392,31 @@ class GrandRegister( object ):
         return context
 
     def search_form_init(self):
-        # CREATE SEARCH FORM
+        """CREATE (or take from params) SEARCH FORM"""
+        if self.search.form:
+            self.search_form = self.search.form
+        else:
 
-        # print 'dbg use_grand_search_form', self.use_grand_search_form
-        if self.search.use_grand_search_form:
-            # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
-            def my_grand_search_form(*fields, **kwargs):
-                from searching import search_form as grand_search_form
-                return grand_search_form(self.cid, *fields, **kwargs)
+            # print 'dbg use_grand_search_form', self.use_grand_search_form
+            if self.search.use_grand_search_form:
+                # kwargs.setdefault('form_factory', SQLFORM.factory) # TODO change to grand search_form..
+                def my_grand_search_form(*fields, **kwargs):
+                    from searching import search_form as grand_search_form
+                    return grand_search_form(self.cid, *fields, **kwargs)
 
-            # kwargs.setdefault( 'form_factory', my_grand_search_form )
-            self.search.form_factory = my_grand_search_form
+                # kwargs.setdefault( 'form_factory', my_grand_search_form )
+                self.search.form_factory = my_grand_search_form
 
-        # a bit smarter way -- in case   kwargs['form_factory'] is None
-        # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
-        # kwargs['form_factory'] = self.form_factory
+            # a bit smarter way -- in case   kwargs['form_factory'] is None
+            # self.form_factory = kwargs.pop('form_factory', None) or  my_grand_search_form
+            # kwargs['form_factory'] = self.form_factory
 
 
-        search_fields = self.search.pop('fields', None)  # in form_factory they need to be separated form kwargs
+            search_fields = self.search.pop('fields', None)  # in form_factory they need to be separated form kwargs
 
-        self.search_form = GrandSQLFORM( *search_fields, **join_dicts(self.search, self.dalview) )
+            self.search_form = GrandSQLFORM( *search_fields, **join_dicts(self.search, self.dalview) )
 
-        self.search.fields = search_fields  # put them back (just in case :))
+            self.search.fields = search_fields  # put them back (just in case :))
 
         # self.search_fields = self.search_form.formfields_flat  # UPDATES items to flattened SearchField instances
 
