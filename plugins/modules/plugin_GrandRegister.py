@@ -306,7 +306,7 @@ class GrandRegister( object ):
                     caption = getattr(f, 'label', str(f))
                     try:
                         if caption.lower() == f.table._id.name.lower(): caption = str(f).replace('.', ' ').title()
-                    except Exception as e: print "Warning in w2ui_init:", e
+                    except Exception as e: print "Warning in w2ui_init:", e, f
 
                     # defaults
                     w2ui_col =  {

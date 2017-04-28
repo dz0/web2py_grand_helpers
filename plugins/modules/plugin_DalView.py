@@ -158,11 +158,14 @@ class DalView(Storage):
         """
 
         columns = self.translation.columns if (self.translator and self.translation) else self.columns
-        print "DBG DalView columns:", map(str, columns)
+        if getattr(current, "DBG", None):
+            print "DBG DalView columns:", map(str, columns)
 
         if just_repeat_nonagregates:
             # TOTAL_ROWS is also recognized as aggregate
-            fields = cols_nonagregates = [col for col in  columns if not is_aggregate(col)]
+            from modules.helpers import TOTAL_ROWS
+
+            fields = cols_nonagregates = [col for col in  columns if not (is_aggregate(col) or str(col)==TOTAL_ROWS) ]
 
 
         else:
@@ -297,6 +300,7 @@ class DalView(Storage):
             # ignore_left_append
             if self.ignore_left_append and self.left_append:
                 print "Warning -- forgeting left_append", represent_joins( self.left_append )
+                self.left_append = None
 
             # if not self.append_join_chains:
             #     # self.translator = GrandTranslator( self.translate_fiels or [] , language_id=2 )
@@ -318,9 +322,9 @@ class DalView(Storage):
 
     def get_join_chains( type_ = 'left'):
         #parse chains and return tablenames
-        return "TODO" 
+        raise RuntimeError(  "TODO" ) # TODO
         
-    def get_join(self, type_='left'): # TODO: better make left as @property
+    def get_join(self, type_='left'): # TODO maybe: better make left as @property ?
         #its a pitty, that there is left and join, but not left and inner properties...
             
         if type_=='left':

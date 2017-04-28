@@ -5,8 +5,8 @@ track_changes(True)
 
 from gluon import current
 
-current.DBG = True
-current.dev_limitby = 0, 10  # sets limitby in DalView... for DBG purposes
+# current.DBG = True
+# current.dev_limitby = 0, 10  # sets limitby in DalView... for DBG purposes
 
 ############# DAL/SQL LOGGING  ##################
 
@@ -14,8 +14,8 @@ current.dev_limitby = 0, 10  # sets limitby in DalView... for DBG purposes
 #     import pydal.adapters.base as _
 #     _.TIMINGSSIZE = n
 
-# from plugin_grand_helpers import set_TIMINGSSIZE
-# set_TIMINGSSIZE(n)
+from plugin_grand_helpers import set_TIMINGSSIZE
+set_TIMINGSSIZE(1000)
 
 
 

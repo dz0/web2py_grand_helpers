@@ -457,6 +457,8 @@ def test_63e_granderp_good_goods_T_Autocomplete_WITH_common_filter():
     return result
 
 def test_63zz_good_goods_NG():
+    # good -> good_group <- good_collection_group ; good_category ; measurement
+    # graph MODEL: http://localhost:8000/app/appadmin/graph_model?tables=good+-%3E+good_group+%3C-+good_collection_group+%3B++good_category+%3B+measurement&show_fields=&neighbours=0&action=list#
 
     db.good_group._common_filter = lambda q:  db.good_group.active == True
     db.good_category._common_filter = lambda q:  db.good_category.active == True
@@ -500,8 +502,16 @@ def test_63zz_good_goods_NG():
                              , dalview_translator=gt #GrandTranslator( fields = [db.good.title], language_id=2 )
                              , crud_controller='good'  # or None for postback with default SQLFORM() behaviour
 
-                             ,dalview_left_join_chain = [db.good_group, db.good_collection_group]
-                             , dalview_append_join_chains=True
+                             , dalview_left_join_chains = [ # galima ir "inner" vietoj "left"
+                                        [db.good, db.good_group, db.good_collection_group],
+                                        [db.good, db.good_category],
+                                        [db.good, db.measurement]
+                                ]
+
+                            , dalview_ignore_left_append = True # virtual fields' required joins are ignored
+                             # , dalview_left_join_chain = [db.good_group, db.good_collection_group]
+
+                             # , dalview_append_join_chains_DEPRECATED =True
 
                              , dalview_smart_groupby_4distinct=True
                              , dalview_distinct=True
@@ -648,6 +658,8 @@ def test_65_invoice_invoices_searchForm_datesPicking_TODO():
 
 def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     from plugin_GrandTranslator import T_AutocompleteWidget
+    from widgets import AUTOCOMPLETE
+
     cid = 'batches'
 
     db.warehouse_batch.good_id.widget = T_AutocompleteWidget( gt, request, db.good.title , id_field=db.good.id) # | db.category
@@ -656,10 +668,10 @@ def test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget():
     #     db, auth, 'good', url=URL('warehouse', 'search_batch_goods'),
     #     context='form[name=batches__form]'
     # ).widget
-    # db.warehouse_batch.supplier_id.widget = AUTOCOMPLETE(
-    #     db, auth, 'subject_subject', url=URL('warehouse', 'search_batch_suppliers'),
-    #     context='form[name=batches__form]'
-    # ).widget
+    db.warehouse_batch.supplier_id.widget = AUTOCOMPLETE(
+        db, auth, 'subject_subject', url=URL('warehouse', 'search_batch_suppliers'),
+        context='form[name=batches__form]'
+    ).widget
 
     search_fields = [
         [db.good.group_id,
@@ -730,6 +742,8 @@ def test_66b_aggregate_warehouse_batches_Grid():
         # , left #** select__kwargs
         # , limitby=(0,2)
     )
+    total_field_vagg.w2ui = dict(caption =  '{0}, {1}'.format(T('warehouse_batch__total'), get_symbol(db)) )
+    # total_field_vagg.w2ui = dict(caption = format(T('warehouse_batch__total') + (' %s' if '%s' not in T('warehouse_batch__total') else ''), get_symbol(db)))
 
     received_field = db.warehouse_batch.received.sum()
     reserved_field = db.warehouse_batch.reserved.sum()
@@ -740,17 +754,19 @@ def test_66b_aggregate_warehouse_batches_Grid():
 
     columns = [
         # db.good.id,
-        represent_PK( db.good.id ), # virtual Expression
-        db.good.title
-        # , db.warehouse_batch.id  # for dbg purposes
+        represent_PK( db.good.id ) # virtual Expression
+        #,   db.good.title
+
+        # , total_field_v # ordinary virtual
+        , total_field_vagg  # virtual aggregate
+
+              # , db.warehouse_batch.id  # for dbg purposes
         #
         ,received_field
         ,reserved_field
         ,used_field
         ,residual_field
         # , db.warehouse_batch.good_id
-        # , total_field_v # ordinary virtual
-        , total_field_vagg # virtual aggregate
 
         # , db.good.group_id
         # , db.good.category_id
@@ -789,9 +805,9 @@ def test_66c_aggregate_warehouse_batches_Register():
     request.vars._66_inside_Register = True
     cols = test_66b_aggregate_warehouse_batches_Grid()
     search_fields = test_66a_warehouse_batches_SearchForm_with_T_AutocompleteWidget()
+    # graph MODEL: http://localhost:8000/app/appadmin/graph_model?action=list&neighbours=0&show_fields=&tables=good+warehouse_batch+warehouse+branch_staff+branch+branch_warehouse++good_collection_group
     # good warehouse_batch
     # warehouse_ids =allowed_warehouse_ids(..)  # warehouse branch_staff branch branch_warehouse
-    residuals_sum_w2ui_name = FormField.construct_new_name(db.warehouse_batch.residual.sum())
 
     db.warehouse_batch._common_filter  = lambda q:  db.warehouse_batch.good_id > 0
 
@@ -799,32 +815,21 @@ def test_66c_aggregate_warehouse_batches_Register():
 
                              columns_force_FK_table_represent=True,
                              cid='batches',
-                             # maintable_name='batches',
                              # maintable_name='good',
-                             # grid_data_name='batches',
                              search_fields=search_fields
+                              , search_table_name='batches'  # cid
 
-                             , w2ui_sort =  [ {'field': db.warehouse_batch.residual.sum(), 'direction': "desc"} ]
-                             # , w2ui_sort =  [ {'field': residuals_sum_w2ui_name, 'direction': "desc"} ]
-                             # , dalview_left_join_chain=[db.good, db.warehouse_batch]
+                              , w2ui_sort =  [ {'field': db.warehouse_batch.residual.sum(), 'direction': "desc"} ]
                              , dalview_inner_join_chain=[db.good, db.warehouse_batch]
-                             # , dalview_left=[db.warehouse_batch.on(db.warehouse_batch.good_id == db.good.id)]
-                             # , dalview_left= build_joins_chain( db.warehouse_batch, db.good )
-                             # , dalview_append_join_chains=True # deprecated
-                             # , dalview_ignore_left_append = True
                              , dalview_smart_groupby_4distinct=True
-                             # , dalview_translator = gt
+                             , dalview_translator = gt
 
-                             # filters=filters  # fast filters
-                             # ,
-                             # , translator=gt   # GrandTranslator( fields = [db.good.title], language_id=2 )
 
                              , crud_controller='warehouse'  # or None for postback with default SQLFORM() behaviour
 
                              , search_formstyle=None  # 'divs' if IS_MOBILE else None,
                              # _class = 'mobile_sqlform' if IS_MOBILE else None,
 
-                             # ,w2grid_options_extra_toolbar_more = "BLA"
                              )
     return register.render()
 
