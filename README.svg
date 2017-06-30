@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="297mm"
+   height="210mm"
+   viewBox="0 0 1052.3622 744.09449"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="README.svg">
+  <defs
+     id="defs4">
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker5213"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#ff0000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         id="path5215"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker5167"
+       style="overflow:visible"
+       inkscape:isstock="true"
+       inkscape:collect="always">
+      <path
+         id="path5169"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         style="fill:#0000ff;fill-opacity:1;fill-rule:evenodd;stroke:#0017ff;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <inkscape:path-effect
+       effect="powerstroke"
+       id="path-effect5026"
+       is_visible="true"
+       offset_points="0,0.5"
+       sort_points="true"
+       interpolator_type="Linear"
+       interpolator_beta="0.2"
+       start_linecap_type="zerowidth"
+       linejoin_type="round"
+       miter_limit="4"
+       end_linecap_type="zerowidth"
+       cusp_linecap_type="round" />
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker4986"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend"
+       inkscape:collect="always">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         id="path4988"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend"
+       style="overflow:visible"
+       inkscape:isstock="true"
+       inkscape:collect="always">
+      <path
+         id="path4537"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker4850"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path4852"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker5167-8"
+       style="overflow:visible"
+       inkscape:isstock="true"
+       inkscape:collect="always">
+      <path
+         inkscape:connector-curvature="0"
+         id="path5169-9"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 Z"
+         style="fill:#0000ff;fill-opacity:1;fill-rule:evenodd;stroke:#0017ff;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="358.30628"
+     inkscape:cy="425.11199"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1366"
+     inkscape:window-height="704"
+     inkscape:window-x="0"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1"
+     inkscape:snap-object-midpoints="false"
+     inkscape:snap-others="true"
+     units="mm" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Sluoksnis 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-308.26771)">
+    <flowRoot
+       xml:space="preserve"
+       id="flowRoot3336"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+         id="flowRegion3338"><rect
+           id="rect3340"
+           width="402.04071"
+           height="258.59906"
+           x="74.751289"
+           y="236.15895" /></flowRegion><flowPara
+         id="flowPara3342" /></flowRoot>    <flowRoot
+       xml:space="preserve"
+       id="flowRoot3344"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       transform="translate(293.87961,165.71429)"><flowRegion
+         id="flowRegion3346"><rect
+           id="rect3348"
+           width="413.44312"
+           height="307.22482"
+           x="28.284271"
+           y="254.34169" /></flowRegion><flowPara
+         id="flowPara3368">              Grand (w2ui) standartinis būdas</flowPara><flowPara
+         id="flowPara3699" /><flowPara
+         id="flowPara3701">registro funkcija:</flowPara><flowPara
+         id="flowPara3370">- <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7966">paieškos forma</flowSpan> (+laukų <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7974">vertimai</flowSpan>)</flowPara><flowPara
+         id="flowPara3703">- <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7964">lentelės</flowSpan> laukų aprašas</flowPara><flowPara
+         id="flowPara3695" /><flowPara
+         id="flowPara3374">grid duomenų funkcija:</flowPara><flowPara
+         id="flowPara3378">- paruošia užklausą</flowPara><flowPara
+         id="flowPara3601">   - susirenka paieškos kriterijus (query)</flowPara><flowPara
+         id="flowPara7954">   - rikiavimą (+map'inimas agreguotiems laukams)</flowPara><flowPara
+         id="flowPara7952">   - nurodo <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7976">reikiamus laukus</flowSpan>/išraiškas</flowPara><flowPara
+         id="flowPara3603">   - laukų <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7970">vertimus</flowSpan></flowPara><flowPara
+         id="flowPara7942">   -<flowSpan
+   style="font-weight:bold"
+   id="flowSpan7972"> lentelių jungimą</flowSpan></flowPara><flowPara
+         id="flowPara3382">- paima duomenis iš DB</flowPara><flowPara
+         id="flowPara3403">- pertvarko duomenis, kad tiktų w2ui</flowPara><flowPara
+         id="flowPara3405" /><flowPara
+         id="flowPara3380" /><flowPara
+         id="flowPara3376" /><flowPara
+         id="flowPara3372" /><flowPara
+         id="flowPara3360" /></flowRoot>    <flowRoot
+       transform="translate(287.41412,601.64838)"
+       xml:space="preserve"
+       id="flowRoot3344-3"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+         id="flowRegion3346-6"><rect
+           id="rect3348-7"
+           width="608.07697"
+           height="133.20674"
+           x="28.284271"
+           y="254.34169" /></flowRegion><flowPara
+         id="flowPara3350-5">šiaip: -</flowPara><flowPara
+         id="flowPara7984">Web2py duomenų paėmimas iš DB:</flowPara><flowPara
+         id="flowPara3352-5">1) užklausa paima duomenis kaip matricą</flowPara><flowPara
+         id="flowPara3663">2) DAL pertvarko į struktūrizuotas eilutes (su vardiniais laukais)</flowPara><flowPara
+         id="flowPara7986" /><flowPara
+         id="flowPara7988">3) w2ui reikia eilučių kaip žodynų (bet nestruktūrizuotų pagal lenteles) </flowPara><flowPara
+         id="flowPara3366-6" /><flowPara
+         id="flowPara3380-3" /><flowPara
+         id="flowPara3376-6" /><flowPara
+         id="flowPara3372-0" /><flowPara
+         id="flowPara3360-6" /></flowRoot>    <flowRoot
+       transform="translate(747.51954,168.53376)"
+       xml:space="preserve"
+       id="flowRoot3344-2"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
+         id="flowRegion3346-61"><rect
+           id="rect3348-8"
+           width="327.11609"
+           height="242.87967"
+           x="28.284271"
+           y="254.34169" /></flowRegion><flowPara
+         id="flowPara3368-7">      GrandRegister (w2ui):</flowPara><flowPara
+         id="flowPara3697" /><flowPara
+         id="flowPara3645">išvardinami:</flowPara><flowPara
+         id="flowPara3649">- <flowSpan
+   style="font-weight:bold"
+   id="flowSpan3651">verčiami</flowSpan> laukai</flowPara><flowPara
+         id="flowPara3643">- <flowSpan
+   style="font-weight:bold"
+   id="flowSpan3653">paieškos formos</flowSpan> laukai </flowPara><flowPara
+         id="flowPara3635"
+         style="font-weight:normal">- <flowSpan
+   style="font-weight:bold"
+   id="flowSpan7962">lentelės</flowSpan> laukai</flowPara><flowPara
+         style="font-weight:normal"
+         id="flowPara3657">- supaprastintas <flowSpan
+   style="font-weight:bold"
+   id="flowSpan3659">lentelių jungimas</flowSpan></flowPara><flowPara
+         style="font-weight:normal"
+         id="flowPara7978" /><flowPara
+         style="font-weight:normal"
+         id="flowPara7980">padaro tą patį, ką standartinis būdas</flowPara><flowPara
+         id="flowPara3405-7"
+         style="font-weight:bold" /><flowPara
+         id="flowPara3380-5"
+         style="font-weight:bold" /><flowPara
+         id="flowPara3376-9"
+         style="font-weight:bold" /><flowPara
+         id="flowPara3372-2"
+         style="font-weight:bold" /><flowPara
+         id="flowPara3360-2"
+         style="font-weight:bold" /></flowRoot>    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="335.71429"
+       y="368.07648"
+       id="text3665"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3667"
+         x="335.71429"
+         y="368.07648">Web2py / GrandERP  registro veikimo schema</tspan></text>
+    <g
+       id="g3685"
+       transform="translate(340,208.57143)">
+      <rect
+         y="235.21935"
+         x="-328.57144"
+         height="102.85714"
+         width="207.14285"
+         id="rect3669"
+         style="fill:#e6e6e6" />
+      <text
+         sodipodi:linespacing="125%"
+         id="text3673"
+         y="265.21936"
+         x="-285.71429"
+         style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         xml:space="preserve"><tspan
+           y="265.21936"
+           x="-285.71429"
+           id="tspan3675"
+           sodipodi:role="line">Paieškos forma</tspan></text>
+    </g>
+    <g
+       id="g3690"
+       transform="translate(335.71429,112.85714)">
+      <rect
+         y="438.07648"
+         x="-324.28571"
+         height="140"
+         width="208.57143"
+         id="rect3671"
+         style="fill:#e6e6e6" />
+      <text
+         sodipodi:linespacing="125%"
+         id="text3677"
+         y="465.21936"
+         x="-278.57144"
+         style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         xml:space="preserve"><tspan
+           id="tspan3681"
+           y="465.21936"
+           x="-278.57144"
+           sodipodi:role="line">Duomenų lentelė</tspan></text>
+    </g>
+    <rect
+       style="fill:#cccccc"
+       id="rect3705"
+       width="158.57132"
+       height="75.714317"
+       x="40.000027"
+       y="595.2193" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)"
+       d="m 321.78752,486.40282 -128.13559,0.16099"
+       id="path4962"
+       inkscape:connector-type="polyline"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.00309134px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker4986)"
+       d="M 319.25017,507.6615 124.85555,597.9892"
+       id="path4978"
+       inkscape:connector-type="polyline"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <rect
+       style="fill:#cccccc"
+       id="rect5022"
+       width="125.71429"
+       height="55.714287"
+       x="51.428585"
+       y="480.93365" />
+    <path
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#0017ff;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker5167)"
+       d="m 154.21392,518.90101 161.09427,22.03262"
+       id="path5191"
+       inkscape:connector-type="polyline"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#ff0000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker5213)"
+       d="M 317.92022,691.55511 157.37055,640.38392"
+       id="path5205"
+       inkscape:connector-type="polyline"
+       inkscape:connector-curvature="0"
+       inkscape:connection-end="#g3690"
+       sodipodi:nodetypes="cc" />
+    <rect
+       style="fill:#b3b3b3"
+       id="rect5295"
+       width="155.71428"
+       height="12.857142"
+       x="41.428585"
+       y="596.64789" />
+    <path
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#0017ff;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker5167-8)"
+       d="M 150.16578,601.61831 313.25062,546.75318"
+       id="path5191-7"
+       inkscape:connector-type="polyline"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:15px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="-643.7713"
+       y="76.785271"
+       id="text7226"
+       sodipodi:linespacing="125%"
+       transform="matrix(0.06616279,-0.99780884,0.99780884,0.06616279,0,0)"><tspan
+         sodipodi:role="line"
+         id="tspan7228"
+         x="-643.7713"
+         y="76.785271">w2ui</tspan></text>
+  </g>
+</svg>
