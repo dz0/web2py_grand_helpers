@@ -1,0 +1,48 @@
+{{if request.function=='smart_join':}}
+    {{=result}}
+    {{=response.toolbar()}}
+{{pass}}
+
+{{if request.function=='graph_model':}}
+<h2>{{=T("Graph Model")}}</h2>
+  {{if not pgv:}}
+    {{=T('pygraphviz library not found')}}
+  {{elif not databases:}}
+    {{=T("No databases in this application")}}
+  {{else:}}
+  Filter tables:	
+  {{=TABLE(TR(forms))}}
+
+  {{if request.vars.action == 'findpath' and session.findpath :}}
+  
+  <div style="padding: 5px; font-weight:bold">
+  Joins:
+    <ul>
+    {{for path, stuff in session.findpath['joins'].items(): }}
+         <li>  {{=path}} {{=stuff[1]}} </li> 
+    {{pass}}
+    </ul>
+  </div>
+  {{pass}}
+    <div class="btn-group">
+      <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+        <i class="icon-download"></i> {{=T('Save model as...')}}
+        <span class="caret"></span>
+      </a>
+      <ul class="dropdown-menu">
+          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['png'], vars=session.graph_model_vars)}}">png</a></li>
+          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['svg'], vars=session.graph_model_vars)}}">svg</a></li>
+          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['pdf'], vars=session.graph_model_vars)}}">pdf</a></li>
+          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['ps'], vars=session.graph_model_vars)}}">ps</a></li>          
+          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['dot'], vars=session.graph_model_vars)}}">dot</a></li>                                   
+      </ul>
+    </div>
+    {{#=response.toolbar()}}
+    <br />
+    {{ svg_link=URL('appadmin', 'bg_graph_model', vars=session.graph_model_vars) }}
+    <object type="image/svg+xml" data="{{=svg_link}}"> 
+        Your browser does not support SVG: {{=A(IMG(_src=svg_link), _href=svg_link) }}
+    </object>
+    
+  {{pass}}
+{{pass}}
