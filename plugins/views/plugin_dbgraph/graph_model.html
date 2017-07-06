@@ -1,3 +1,5 @@
+{{extend 'layout.html'}}
+
 {{if request.function=='smart_join':}}
     {{=result}}
     {{=response.toolbar()}}
@@ -10,15 +12,24 @@
   {{elif not databases:}}
     {{=T("No databases in this application")}}
   {{else:}}
-  Filter tables:	
-  {{=TABLE(TR(forms))}}
+  
+  <h3>Choose the way to filter shown tables:</h3>:	
+
+  {{=TABLE(TR([TD(f) for f in forms]))}}
 
   {{if request.vars.action == 'findpath' and session.findpath :}}
   
   <div style="padding: 5px; font-weight:bold">
   Joins:
     <ul>
-    {{for path, stuff in session.findpath['joins'].items(): }}
+    {{ get_path_len = lambda path: path.count('-') }}
+    {{ curr_path_len = 0 }}
+    {{for path, stuff in sorted( session.findpath['joins'].items(), key=lambda tupl: get_path_len(tupl[0]) ): }}
+        {{ if get_path_len( path ) > curr_path_len: }} 
+        {{ curr_path_len = get_path_len( path ) }}
+        <br>
+         <li>  {{ =curr_path_len }} JOIN(S): </li> 
+         {{pass}}
          <li>  {{=path}} {{=stuff[1]}} </li> 
     {{pass}}
     </ul>
@@ -30,16 +41,16 @@
         <span class="caret"></span>
       </a>
       <ul class="dropdown-menu">
-          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['png'], vars=session.graph_model_vars)}}">png</a></li>
-          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['svg'], vars=session.graph_model_vars)}}">svg</a></li>
-          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['pdf'], vars=session.graph_model_vars)}}">pdf</a></li>
-          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['ps'], vars=session.graph_model_vars)}}">ps</a></li>          
-          <li><a href="{{=URL('appadmin', 'bg_graph_model', args=['dot'], vars=session.graph_model_vars)}}">dot</a></li>                                   
+          <li><a href="{{=URL('bg_graph_model', args=['png'], vars=session.graph_model_vars)}}">png</a></li>
+          <li><a href="{{=URL('bg_graph_model', args=['svg'], vars=session.graph_model_vars)}}">svg</a></li>
+          <li><a href="{{=URL('bg_graph_model', args=['pdf'], vars=session.graph_model_vars)}}">pdf</a></li>
+          <li><a href="{{=URL('bg_graph_model', args=['ps'], vars=session.graph_model_vars)}}">ps</a></li>          
+          <li><a href="{{=URL('bg_graph_model', args=['dot'], vars=session.graph_model_vars)}}">dot</a></li>                                   
       </ul>
     </div>
     {{#=response.toolbar()}}
     <br />
-    {{ svg_link=URL('appadmin', 'bg_graph_model', vars=session.graph_model_vars) }}
+    {{ svg_link=URL('bg_graph_model', vars=session.graph_model_vars) }}
     <object type="image/svg+xml" data="{{=svg_link}}"> 
         Your browser does not support SVG: {{=A(IMG(_src=svg_link), _href=svg_link) }}
     </object>

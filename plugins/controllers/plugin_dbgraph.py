@@ -58,6 +58,9 @@ databases = get_databases(None)
 
 #############  DIFF's start here ####################
 
+TABLE_ADMIN_HREF_TPL = URL("appadmin", "select")+"/db?query=db.%s"  # CAN CONFIG to point to phpmyadmin, adminer or so...
+# example: "http://127.0.0.1:8000/app/appadmin/select/db?query=db.address_country"
+
 def index(): redirect( URL( 'graph_model' ))
 
 def table_template(table):
@@ -218,6 +221,7 @@ def bg_graph_model():
             subgraphs[group]['tables'].append(tablename)
 
         graph.add_node(tablename, name=tablename, shape='plaintext',
+                       href=TABLE_ADMIN_HREF_TPL % tablename,
                        label=table_template(tablename) 
                              if is_shown(tablename) else tablename
                         )
@@ -420,17 +424,50 @@ def graph_model():
         Field('tables',  default=previous.get('tables', ''),   ), 
         Field('show_fields',  default=previous.get('show_fields', 'fk') ), 
         Field('neighbours', "integer", default=previous.get('neighbours', 0 )), 
-        Field('action', default="list"), 
+        Field('action',  default="list"), 
         _method="GET",
     )
       
     # highlight currently submitted  form
     for form in [match_form, findpath_form, list_form]:
-        form_action = form.element('input',_name='action')['_value']
+        input_action_type = form.element('input', _name='action')
+        input_action_type.parent.parent['_style'] = "display: none"
+        form_action = input_action_type['_value']
         if form_action :
             if form_action == request.vars.action:
                 # response.flash+= form_action+ " \n "
-                form['_style']="margin: 5px; padding:5px; border:1px gray solid;"
+                form['_style']="margin: 5px; padding:5px; border:1px gray solid;  background-color: #E5E5E5;"
                 # form.element('table')['_style']="background-color: #E5E5E5"
-            
-    return dict(databases=databases, pgv=pgv, forms=[findpath_form, list_form, match_form])
+        
+    docs = {
+        'FindPath': "Selects tables that connect \"Start\" with \"Finish\"", 
+        'List': "Selects tables that are listed (wrong names are ignored) ", 
+        'Match': """Selects tables with names or fieldnames, that match given fragments. 
+            <br>Some "features":
+            <li>Fragments should be separated by spaces</li> 
+            <li>If you want to exclude sth, you can put "-fragment" before  (it would not affect if mentiont afterwards).  </li> 
+            <li>Empty "Table filters" will select all the tables  </li> 
+            <li>If "Field filters" is empty, it defaults to "Table filters"</li> 
+            """, 
+        'common': """<br><br>
+                    "Show Fields" - filter by fragments which fields to display in tables structure.  <br>
+                    "Neighbours" - how many levels of adjacent neighbour-tables to show (just table names). 
+                """
+        }
+    forms=[ 
+            findpath_form, 
+            list_form, 
+            match_form
+          ]
+          
+    names = locals()
+    get_form = lambda form_name: names[form_name.lower()+"_form"]
+    
+    forms = [ CAT(
+                H3(form_name , 
+                    CAT( " (", A("?", _href="#", _onclick="document.getElementById('docs_"+form_name+"').style.display='block';" ), ")") ), 
+                DIV(XML(docs[form_name]+docs['common']), _id="docs_"+form_name, _style="display:none"), 
+                get_form(form_name)
+                )  for form_name in  "FindPath List Match".split() ]
+    
+    return dict(databases=databases, pgv=pgv, forms=forms)
