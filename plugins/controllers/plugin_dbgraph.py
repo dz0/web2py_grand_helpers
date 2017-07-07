@@ -465,7 +465,7 @@ def graph_model():
     
     forms = [ CAT(
                 H3(form_name , 
-                    CAT( " (", A("?", _href="#", _onclick="document.getElementById('docs_"+form_name+"').style.display='block';" ), ")") ), 
+                    CAT( " (", A("?", _href="#", _onclick="toggle('docs_"+form_name+"');" ), ")") ), 
                 DIV(XML(docs[form_name]+docs['common']), _id="docs_"+form_name, _style="display:none"), 
                 get_form(form_name)
                 )  for form_name in  "FindPath List Match".split() ]

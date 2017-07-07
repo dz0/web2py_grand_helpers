@@ -14,6 +14,15 @@
   {{else:}}
   
   <h3>Choose the way to filter shown tables:</h3>:	
+  <script>
+      
+      function toggle(id){
+          el = document.getElementById(id);
+          d = el.style.display;
+          el.style.display = (d=='block'||d=='') ? 'none': 'block' ;
+      }
+
+  </script>
 
   {{=TABLE(TR([TD(f) for f in forms]))}}
 
@@ -24,13 +33,17 @@
     <ul>
     {{ get_path_len = lambda path: path.count('-') }}
     {{ curr_path_len = 0 }}
-    {{for path, stuff in sorted( session.findpath['joins'].items(), key=lambda tupl: get_path_len(tupl[0]) ): }}
+    {{for path, stuff in sorted( session.findpath['joins'].items(), key=lambda tupl: ( get_path_len(tupl[0]), tupl[0]) ): }}
         {{ if get_path_len( path ) > curr_path_len: }} 
         {{ curr_path_len = get_path_len( path ) }}
         <br>
          <li>  {{ =curr_path_len }} JOIN(S): </li> 
          {{pass}}
-         <li>  {{=path}} {{=stuff[1]}} </li> 
+         {{ DAL_code, url = stuff }}
+         <li>  {{=path}} {{=url}} 
+            (<a href="#" onclick="toggle('code_{{=path}}')">py</a>) 
+            <div id='code_{{=path}}' style="display:none">{{=DAL_code}}</div>
+         </li> 
     {{pass}}
     </ul>
   </div>
@@ -48,12 +61,13 @@
           <li><a href="{{=URL('bg_graph_model', args=['dot'], vars=session.graph_model_vars)}}">dot</a></li>                                   
       </ul>
     </div>
-    {{#=response.toolbar()}}
     <br />
     {{ svg_link=URL('bg_graph_model', vars=session.graph_model_vars) }}
     <object type="image/svg+xml" data="{{=svg_link}}"> 
         Your browser does not support SVG: {{=A(IMG(_src=svg_link), _href=svg_link) }}
     </object>
+
+    {{=response.toolbar()}}
     
   {{pass}}
 {{pass}}
