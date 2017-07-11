@@ -21,17 +21,16 @@
 
 # db = get_databases(request)[0]
 
+# from plugin_AnySQLFORM import AnySQLFORM, FormField
+
 def index():
     
     # for tablename in db.tables:
         # for field in db[tablename]:
-    tables_HTML = []
-    for tablename in db.tables:
-        
-        fields_HTML = SQLFORM.factory( *[Field(f.name, type='boolean') for f in db[tablename] ] )
-        
-        tables_HTML.append( DIV(tablename, fields_HTML)    )
+    tables_HTML = SQLFORM.factory(
+                 *[ Field( tablename, requires=IS_IN_SET( db[tablename], multiple=True ) )      for tablename in db.tables]
+                )
 
-    
+    # may apply http://www.jqueryscript.net/form/jQuery-Plugin-To-Convert-Select-Options-To-Checkboxes-multicheck.html
     result = CAT( UL(tables_HTML) , STYLE("li {float:left; padding:30px}; ") )
-    return result
+    return dict(contents=result)
