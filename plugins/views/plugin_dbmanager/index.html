@@ -1,3 +1,5 @@
+{{#extend 'generic.html'}}
+{{=BEAUTIFY(response._vars)}}
 
 
 <!--
@@ -7,28 +9,21 @@ http://www.jqueryscript.net/demo/jQuery-Plugin-To-Convert-Select-Options-To-Chec
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 <script src="http://www.jqueryscript.net/demo/jQuery-Plugin-To-Convert-Select-Options-To-Checkboxes-multicheck/jquery.multicheck.js"></script>
 
-{{=contents}}
-
 <script>
-$('select').multicheck({
-  label_wrap: '<div class="checkbox"></div>'
-});
+<!--
 
+// $('.selector select').multicheck({  label_wrap: '<div class="checkbox"></div>' });
 
-// function toggle_visibility(id) {
-   // var e = document.getElementById(id);
-   // if(e.style.display == 'block')
-      // e.style.display = 'none';
-   // else
-      // e.style.display = 'block';
-// }
 
 $('div.form-group label.control-label').click( function(){ $(this).next().toggle(); } );
+-->
+
 </script>
 
 <style>
 /* div.form-group { float: left; padding: 30px } */
 .col-sm-9 {display:none}
+.col-sm-offset-3 {display:block}
 </style>
 
 {{=response.toolbar()}}
