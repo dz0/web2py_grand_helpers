@@ -13,6 +13,22 @@ http://www.jqueryscript.net/demo/jQuery-Plugin-To-Convert-Select-Options-To-Chec
 $('select').multicheck({
   label_wrap: '<div class="checkbox"></div>'
 });
+
+
+// function toggle_visibility(id) {
+   // var e = document.getElementById(id);
+   // if(e.style.display == 'block')
+      // e.style.display = 'none';
+   // else
+      // e.style.display = 'block';
+// }
+
+$('div.form-group label.control-label').click( function(){ $(this).next().toggle(); } );
 </script>
+
+<style>
+/* div.form-group { float: left; padding: 30px } */
+.col-sm-9 {display:none}
+</style>
 
 {{=response.toolbar()}}
