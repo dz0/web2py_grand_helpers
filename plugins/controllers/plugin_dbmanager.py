@@ -32,5 +32,4 @@ def index():
                 )
 
     # may apply http://www.jqueryscript.net/form/jQuery-Plugin-To-Convert-Select-Options-To-Checkboxes-multicheck.html
-    result = CAT( UL(tables_HTML) , STYLE("li {float:left; padding:30px}; ") )
-    return dict(contents=result)
+    return dict(contents=tables_HTML)
